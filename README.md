@@ -1,10 +1,12 @@
-# Mikuku's xlsx2md
+# miku-xlsx2md
 
-![Mikuku's xlsx2md OGP](docs/screenshots/xlsx2md-ogp.png)
+![miku-xlsx2md OGP](docs/screenshots/xlsx2md-ogp.png)
+
+miku-xlsx2md is one of the tools in Mikuku's software series.
 
 ## What is this?
 
-`Mikuku's xlsx2md` is a single-file web app that reads Excel (`.xlsx`) files locally and extracts prose, tables, and images as Markdown.
+`miku-xlsx2md` is a single-file web app that reads Excel (`.xlsx`) files locally and extracts prose, tables, and images as Markdown.
 
 - Runs entirely in the browser with no server communication
 - Converts the whole workbook automatically without sheet-by-sheet manual work
@@ -28,9 +30,9 @@
 
 ## Feature Support Overview
 
-`Mikuku's xlsx2md` prioritizes extracting workbook content into meaningful Markdown rather than reproducing Excel's visual appearance exactly. The support status for common expectations is as follows.
+`miku-xlsx2md` prioritizes extracting workbook content into meaningful Markdown rather than reproducing Excel's visual appearance exactly. The support status for common expectations is as follows.
 
-| Item | `Mikuku's xlsx2md` status | Notes |
+| Item | `miku-xlsx2md` status | Notes |
 | --- | --- | --- |
 | Read `.xlsx` files | Supported | Runs locally in the browser |
 | Convert a whole workbook in one pass | Supported | Processes all sheets together |
@@ -154,7 +156,7 @@ In the browser UI, `utf-8`, `utf-16le`, `utf-16be`, `utf-32le`, and `utf-32be` s
 - Repository name: `miku-xlsx2md`
 - Published single-file app: `miku-xlsx2md.html`
 - Product / internal name: `xlsx2md`
-- Display name: `Mikuku's xlsx2md`
+- Display name: `miku-xlsx2md`
 
 This repository was moved from `xlsx2md` to `miku-xlsx2md`.
 Public URLs and the published HTML file use `miku-xlsx2md`, while internal identifiers, script names, and specification document names may continue to use `xlsx2md`.
@@ -178,7 +180,7 @@ For more details, see:
 
 ## Example
 
-This is the main `Mikuku's xlsx2md` screen where you load an Excel workbook and review the generated result.
+This is the main `miku-xlsx2md` screen where you load an Excel workbook and review the generated result.
 
 ![xlsx2md screenshot 0](docs/screenshots/xlsx2md_0.png)
 
@@ -186,7 +188,7 @@ The input workbook can contain prose, tables, images, and other spreadsheet cont
 
 ![xlsx2md screenshot 1](docs/screenshots/xlsx2md_1.png)
 
-After loading the workbook, `Mikuku's xlsx2md` extracts the content and generates Markdown text automatically.
+After loading the workbook, `miku-xlsx2md` extracts the content and generates Markdown text automatically.
 
 ![xlsx2md screenshot 2a](docs/screenshots/xlsx2md_2a.png)
 
@@ -196,7 +198,7 @@ The generated Markdown can then be previewed as a readable document.
 
 ## License
 
-### Mikuku's xlsx2md
+### miku-xlsx2md
 
 - Released under the Apache License 2.0
 - See [LICENSE](./LICENSE) for the full license text
@@ -206,7 +208,9 @@ The generated Markdown can then be previewed as a readable document.
 
 ## What is this?
 
-`Mikuku's xlsx2md` は、Excel (`.xlsx`) をローカルで読み込み、地の文・表・画像を Markdown として抽出する Single-file Web App です。
+`miku-xlsx2md` は Mikuku's software series を構成するツールのひとつです。
+
+`miku-xlsx2md` は、Excel (`.xlsx`) をローカルで読み込み、地の文・表・画像を Markdown として抽出する Single-file Web App です。
 
 - ブラウザ内でローカルに動作し、サーバ通信を行いません
 - Excel ブック全体を、シートごとの手作業なしで自動変換します
@@ -230,9 +234,9 @@ The generated Markdown can then be previewed as a readable document.
 
 ## 主な機能の対応状況
 
-`Mikuku's xlsx2md` は、Excel の見た目をそのまま再現することよりも、ブック内の情報を意味のある Markdown として取り出すことを重視しています。代表的な観点での対応状況は次のとおりです。
+`miku-xlsx2md` は、Excel の見た目をそのまま再現することよりも、ブック内の情報を意味のある Markdown として取り出すことを重視しています。代表的な観点での対応状況は次のとおりです。
 
-| 項目 | `Mikuku's xlsx2md` の状況 | 補足 |
+| 項目 | `miku-xlsx2md` の状況 | 補足 |
 | --- | --- | --- |
 | `.xlsx` を読み込める | 対応 | ブラウザ内でローカル実行できる |
 | ブック全体を一括変換できる | 対応 | 全シートをまとめて処理できる |
@@ -365,7 +369,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 - リポジトリ名: `miku-xlsx2md`
 - 公開する Single-file App: `miku-xlsx2md.html`
 - プロダクト名 / 内部名: `xlsx2md`
-- 表示名: `Mikuku's xlsx2md`
+- 表示名: `miku-xlsx2md`
 
 このリポジトリは `xlsx2md` から `miku-xlsx2md` へ移設しました。
 公開 URL や公開 HTML 名は `miku-xlsx2md` を使いますが、内部識別子、スクリプト名、仕様書名には `xlsx2md` が残ることがあります。
@@ -389,7 +393,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 
 ## Example
 
-これは `Mikuku's xlsx2md` のメイン画面です。ここで Excel ブックを読み込み、生成された結果を確認します。
+これは `miku-xlsx2md` のメイン画面です。ここで Excel ブックを読み込み、生成された結果を確認します。
 
 ![xlsx2md screenshot 0](docs/screenshots/xlsx2md_0.png)
 
@@ -397,7 +401,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 
 ![xlsx2md screenshot 1](docs/screenshots/xlsx2md_1.png)
 
-ブックを読み込むと、`Mikuku's xlsx2md` が内容を抽出し、Markdown テキストを自動生成します。
+ブックを読み込むと、`miku-xlsx2md` が内容を抽出し、Markdown テキストを自動生成します。
 
 ![xlsx2md screenshot 2a](docs/screenshots/xlsx2md_2a.png)
 
@@ -407,7 +411,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 
 ## License
 
-### Mikuku's xlsx2md
+### miku-xlsx2md
 
 - Apache License 2.0 のもとで公開しています
 - ライセンス本文は [LICENSE](./LICENSE) を参照してください

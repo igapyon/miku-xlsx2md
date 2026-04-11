@@ -1,5 +1,5 @@
 {
-  "name": "local-html-tools",
+  "name": "miku-xlsx2md",
   "private": true,
   "type": "module",
   "scripts": {

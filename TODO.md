@@ -46,18 +46,19 @@
 
 - [ ] README に新リポジトリ URL / 公開 URL を明記する
   - 現状:
-    - README 自体は表示名 `Mikuku's xlsx2md` で概ね統一済み
-    - ただし新しい GitHub URL や Pages URL の明示導線が弱い
+    - README の表示名は `miku-xlsx2md` に統一済み
+    - 新しい GitHub URL や Pages URL の導線も概ね更新済み
   - 方針候補:
     - 冒頭付近に公開先 URL を追加
     - `Use` セクションまたは `What is this?` 付近にリポジトリ URL を追加
 
 - [ ] `package.json` / `package-lock.json` の package 名をどうするか決める
   - 現状:
-    - `name` は `local-html-tools`
+    - `package.json` の `name` は `miku-xlsx2md` に更新済み
+    - `package-lock.json` 側も必要なら追随させる
   - 判断ポイント:
     - 非公開のローカル用メタデータとして維持するなら変更不要
-    - `miku-xlsx2md` リポジトリの package として揃えるなら rename 候補
+    - `miku-xlsx2md` リポジトリの package として揃えるなら `package-lock.json` も更新する
   - 対象:
     - `package.json`
     - `package-lock.json`
@@ -124,13 +125,13 @@
   - 旧プロジェクト名見出し
 
 - `package.json`
-  - package 名が `local-html-tools`
+  - package 名は `miku-xlsx2md` に更新済み
 
 - `package-lock.json`
   - package 名が `local-html-tools`
 
 ## 補足
 
-- `README.md` は表示名としてはかなり整理済みで、大きく壊れてはいない
-- 問題の中心は「旧 URL が残っていること」と「リポジトリ名変更後の表記ルールがまだ未確定なこと」
-- 次の実作業としては、まず URL と `CONTRIBUTING.md` を直し、その後 package 名や公開ファイル名の方針を決めるのが安全
+- `README.md` の表示名、公開 HTML 名、命名方針は更新済み
+- 旧 URL は移行メモとして `TODO.md` にだけ残している
+- 外向けの整理は一通り完了しており、残課題は内部名をどこまで維持するかの運用判断が中心
