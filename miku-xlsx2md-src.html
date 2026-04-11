@@ -1,0 +1,243 @@
+<!--
+Copyright 2026 Toshiki Iga
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>miku-xlsx2md</title>
+  <link rel="stylesheet" href="lht-cmn/css/components.css" />
+  <link rel="stylesheet" href="src/css/app.css" />
+  <script src="lht-cmn/vendor/material-web-outlined-text-field.bundle.js"></script>
+  <script src="lht-cmn/js/components.js" defer></script>
+</head>
+<body class="md-page">
+  <svg width="0" height="0" aria-hidden="true" focusable="false" class="md-icons">
+    <symbol id="md-icon-github" viewBox="0 0 16 16">
+      <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+    </symbol>
+  </svg>
+  <main class="md-shell">
+    <section class="md-card md-surface-card">
+      <lht-page-hero
+        title="miku-xlsx2md"
+        subtitle="Analyze an Excel workbook (.xlsx) and convert it to Markdown."
+        icon="📘"
+        help-label="About miku-xlsx2md"
+        help-wide
+        action-href="https://github.com/igapyon/miku-xlsx2md"
+        action-aria-label="Open miku-xlsx2md repository"
+        action-icon-id="md-icon-github"
+        menu-home-href="./index.html"
+        menu-home-label="Back to Home">
+        Analyze a local `.xlsx` file, extract narrative text, detect tables, fill merged cells, and generate Markdown.
+      </lht-page-hero>
+
+      <section class="md-section md-stack-md">
+        <h2 class="md-section-title">Input</h2>
+        <div class="md-panel md-stack-sm">
+          <lht-file-select
+            input-id="xlsxFileInput"
+            button-id="xlsxFileSelectBtn"
+            file-name-id="xlsxFileName"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            button-label="Select xlsx File"
+            placeholder="No file selected"
+            show-file-name>
+          </lht-file-select>
+          <div class="md-caption">Processing stays local in your browser. No data is sent to a server. Conversion always covers all sheets.</div>
+        </div>
+      </section>
+
+      <details class="md-section md-accordion">
+        <summary class="md-accordion-summary">
+          <span class="md-section-title">Conversion Settings</span>
+        </summary>
+        <div class="md-accordion-body md-stack-md">
+          <div class="md-grid md-grid--options">
+            <lht-select-help field-id="formattingModeSelect" label="Formatting Mode" help-text="Choose how Excel text emphasis should be represented in Markdown. `github` preserves supported emphasis as GitHub-compatible Markdown or HTML.">
+              <script type="application/json" slot="options">
+                [
+                  { "value": "plain", "label": "plain: output plain text" },
+                  { "value": "github", "label": "github: preserve supported emphasis", "selected": true }
+                ]
+              </script>
+            </lht-select-help>
+            <lht-select-help field-id="tableDetectionModeSelect" label="Table Detection" help-text="Choose how aggressively miku-xlsx2md detects tables. `border` detects tables from bordered regions and reduces borderless fallback detection.">
+              <script type="application/json" slot="options">
+                [
+                  { "value": "balanced", "label": "balanced: bordered + fallback detection", "selected": true },
+                  { "value": "border", "label": "border: bordered regions only" }
+                ]
+              </script>
+            </lht-select-help>
+            <lht-select-help field-id="outputModeSelect" label="Output Mode" help-text="Choose whether Markdown should use displayed values, raw values, or both. The default is `display`, which stays close to Excel's rendered view.">
+              <script type="application/json" slot="options">
+                [
+                  { "value": "display", "label": "display: prefer displayed values", "selected": true },
+                  { "value": "raw", "label": "raw: prefer internal values" },
+                  { "value": "both", "label": "both: include both" }
+                ]
+              </script>
+            </lht-select-help>
+            <lht-select-help field-id="encodingSelect" label="Encoding" help-text="Choose the output encoding used when saving Markdown or ZIP entries. Shift_JIS availability depends on the runtime.">
+              <script type="application/json" slot="options">
+                [
+                  { "value": "utf-8", "label": "UTF-8", "selected": true },
+                  { "value": "shift_jis", "label": "Shift_JIS" },
+                  { "value": "utf-16le", "label": "UTF-16 LE" },
+                  { "value": "utf-16be", "label": "UTF-16 BE" },
+                  { "value": "utf-32le", "label": "UTF-32 LE" },
+                  { "value": "utf-32be", "label": "UTF-32 BE" }
+                ]
+              </script>
+            </lht-select-help>
+            <lht-select-help field-id="bomSelect" label="BOM" help-text="Choose whether a Unicode BOM should be written at the start of saved Markdown bytes. Shift_JIS does not support BOM.">
+              <script type="application/json" slot="options">
+                [
+                  { "value": "off", "label": "off", "selected": true },
+                  { "value": "on", "label": "on" }
+                ]
+              </script>
+            </lht-select-help>
+            <lht-switch-help switch-id="headerRowEnabled" label="Treat the first row as a header" help-label="About header rows" checked>
+              Use the first row of each detected table as the Markdown table header.
+            </lht-switch-help>
+            <lht-switch-help switch-id="trimTextEnabled" label="Trim surrounding whitespace" help-label="About trimming" checked>
+              Remove leading and trailing whitespace from text cells.
+            </lht-switch-help>
+            <lht-switch-help switch-id="removeEmptyRowsEnabled" label="Remove empty rows" help-label="About empty-row removal" checked>
+              Remove empty rows from detected tables and narrative blocks where possible.
+            </lht-switch-help>
+            <lht-switch-help switch-id="removeEmptyColumnsEnabled" label="Remove empty columns" help-label="About empty-column removal" checked>
+              Remove empty columns from detected tables where possible.
+            </lht-switch-help>
+            <lht-switch-help switch-id="includeShapeDetailsEnabled" label="Include shape details in Markdown" help-label="About shape details" checked>
+              Include Shape Blocks and Shapes sections in the generated Markdown output.
+            </lht-switch-help>
+          </div>
+          <div id="outputModeNotice" class="md-caption">`display` outputs values close to what Excel shows.</div>
+          <div id="formattingModeNotice" class="md-caption">`github` preserves supported Excel emphasis as GitHub-compatible Markdown: bold, italic, strike, underline, and in-cell line breaks as `&lt;br&gt;`.</div>
+          <div id="tableDetectionModeNotice" class="md-caption">`balanced` uses both bordered candidates and value-density fallback detection.</div>
+          <div id="encodingNotice" class="md-caption">`utf-8` is the default Markdown encoding.</div>
+          <div id="bomNotice" class="md-caption">BOM is disabled for saved Markdown bytes.</div>
+        </div>
+      </details>
+
+      <section class="md-section md-stack-md">
+        <div class="md-actions">
+          <button id="convertBtn" class="md-button md-button--secondary" type="button">Convert to Markdown</button>
+          <button id="downloadBtn" class="md-button md-button--secondary" type="button" disabled>Save Markdown</button>
+          <button id="exportZipBtn" class="md-button md-button--secondary-accent" type="button" disabled>Save ZIP with Markdown and Assets</button>
+        </div>
+        <lht-loading-overlay id="loadingOverlay" text="Analyzing xlsx"></lht-loading-overlay>
+        <lht-error-alert id="errorAlert"></lht-error-alert>
+      </section>
+
+      <section class="md-section md-stack-md">
+        <div class="md-panel md-stack-sm">
+          <h2 class="md-section-title">Markdown</h2>
+          <div id="previewModeBanner" class="md-caption" hidden>`raw` and `both` modes may include information beyond Excel's displayed values.</div>
+          <lht-preview-output id="markdownPreview" preview-id="markdownOutput" preview-tag="pre" placeholder="Markdown will appear here"></lht-preview-output>
+        </div>
+      </section>
+
+      <details class="md-section md-accordion">
+        <summary class="md-accordion-summary">
+          <span class="md-section-title">Analysis Summary</span>
+        </summary>
+        <div class="md-accordion-body">
+          <div id="analysisSummary" class="md-summary-list">No conversion yet.</div>
+        </div>
+      </details>
+
+      <details class="md-section md-accordion">
+        <summary class="md-accordion-summary">
+          <span class="md-section-title">Table Candidate Scores</span>
+        </summary>
+        <div class="md-accordion-body">
+          <div class="md-panel md-stack-sm">
+            <div class="md-legend">
+              <span class="md-summary-item-status md-summary-item-status--strong">strong</span>
+              <span class="md-caption">Strong table candidates with a score of 7 or higher</span>
+              <span class="md-summary-item-status md-summary-item-status--candidate">candidate</span>
+              <span class="md-caption">Table candidates with a score of 4 to 6</span>
+            </div>
+            <div id="scoreSummary" class="md-summary-list">No conversion yet.</div>
+          </div>
+        </div>
+      </details>
+
+      <details class="md-section md-accordion">
+        <summary class="md-accordion-summary">
+          <span class="md-section-title">Formula Diagnostics</span>
+        </summary>
+        <div class="md-accordion-body">
+          <div class="md-panel md-stack-sm">
+            <div class="md-legend">
+              <span class="md-summary-item-status md-summary-item-status--resolved">resolved</span>
+              <span class="md-summary-item-status md-summary-item-status--fallback">fallback</span>
+              <span class="md-summary-item-status md-summary-item-status--unsupported">unsupported</span>
+            </div>
+            <div id="formulaSummary" class="md-summary-list">No conversion yet.</div>
+          </div>
+        </div>
+      </details>
+
+      <lht-toast id="toast"></lht-toast>
+    </section>
+  </main>
+
+  <script src="src/js/module-registry.js"></script>
+  <script src="src/js/module-registry-access.js"></script>
+  <script src="src/js/runtime-env.js"></script>
+  <script src="src/js/office-drawing.js"></script>
+  <script src="src/js/zip-io.js"></script>
+  <script src="src/js/border-grid.js"></script>
+  <script src="src/js/markdown-normalize.js"></script>
+  <script src="src/js/markdown-escape.js"></script>
+  <script src="src/js/markdown-table-escape.js"></script>
+  <script src="src/js/text-encoding.js"></script>
+  <script src="src/js/rich-text-parser.js"></script>
+  <script src="src/js/rich-text-plain-formatter.js"></script>
+  <script src="src/js/rich-text-github-formatter.js"></script>
+  <script src="src/js/rich-text-renderer.js"></script>
+  <script src="src/js/narrative-structure.js"></script>
+  <script src="src/js/table-detector.js"></script>
+  <script src="src/js/markdown-export.js"></script>
+  <script src="src/js/sheet-markdown.js"></script>
+  <script src="src/js/styles-parser.js"></script>
+  <script src="src/js/shared-strings.js"></script>
+  <script src="src/js/address-utils.js"></script>
+  <script src="src/js/rels-parser.js"></script>
+  <script src="src/js/worksheet-tables.js"></script>
+  <script src="src/js/cell-format.js"></script>
+  <script src="src/js/xml-utils.js"></script>
+  <script src="src/js/sheet-assets.js"></script>
+  <script src="src/js/worksheet-parser.js"></script>
+  <script src="src/js/workbook-loader.js"></script>
+  <script src="src/js/formula-reference-utils.js"></script>
+  <script src="src/js/formula-engine.js"></script>
+  <script src="src/js/formula-legacy.js"></script>
+  <script src="src/js/formula-ast.js"></script>
+  <script src="src/js/formula-resolver.js"></script>
+  <script src="src/js/formula/tokenizer.js"></script>
+  <script src="src/js/formula/parser.js"></script>
+  <script src="src/js/formula/evaluator.js"></script>
+  <script src="src/js/core.js"></script>
+  <script src="src/js/main.js"></script>
+</body>
+</html>
