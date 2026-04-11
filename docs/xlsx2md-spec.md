@@ -232,9 +232,9 @@ output/
 CLI 使用例:
 
 ```bash
-node scripts/xlsx2md-cli.mjs sample.xlsx --out sample.md --encoding utf-8 --bom off
-node scripts/xlsx2md-cli.mjs sample.xlsx --out sample-utf16be.md --encoding utf-16be --bom on
-node scripts/xlsx2md-cli.mjs sample.xlsx --zip sample-sjis.zip --encoding shift_jis
+node scripts/miku-xlsx2md-cli.mjs sample.xlsx --out sample.md --encoding utf-8 --bom off
+node scripts/miku-xlsx2md-cli.mjs sample.xlsx --out sample-utf16be.md --encoding utf-16be --bom on
+node scripts/miku-xlsx2md-cli.mjs sample.xlsx --zip sample-sjis.zip --encoding shift_jis
 ```
 
 ### 4.10 エラー方針
@@ -881,7 +881,7 @@ ImageAsset
 │   ├── xlsx2md-spec.md
 │   ├── xlsx2md-impl-spec.md
 │   └── xlsx-formula-subset.md
-├── xlsx2md-src.html
+├── miku-xlsx2md-src.html
 ├── miku-xlsx2md.html
 ├── src/
 │   └── xlsx2md/

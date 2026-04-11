@@ -16,9 +16,12 @@
   - 現在の旧 URL:
     - `https://github.com/igapyon/xlsx2md`
     - `https://igapyon.github.io/xlsx2md/`
+  - 移行先:
+    - `https://github.com/igapyon/miku-xlsx2md`
+    - `https://igapyon.github.io/miku-xlsx2md/`
   - 修正元:
     - `index-src.html`
-    - `xlsx2md-src.html`
+    - `miku-xlsx2md-src.html`
   - 生成物:
     - `index.html`
     - `xlsx2md.html`
@@ -74,8 +77,8 @@
     - `CONTRIBUTING.md`
     - `index-src.html`
     - `index.html`
-    - `scripts/build-xlsx2md.mjs`
-    - `xlsx2md-src.html`
+    - `scripts/build-miku-xlsx2md.mjs`
+    - `miku-xlsx2md-src.html`
   - 判断ポイント:
     - リポジトリ名に合わせて `miku-xlsx2md.html` へ統一する
     - ビルド・README・リンク導線・関連文書をまとめて更新する
@@ -97,15 +100,15 @@
     - `globalThis.__xlsx2mdModuleRegistry`
     - `requireXlsx2md...`
     - `tests/xlsx2md-*.test.js`
-    - `scripts/xlsx2md-cli.mjs`
+    - `scripts/miku-xlsx2md-cli.mjs`
   - 理由:
     - これはプロダクト内部名として一貫しており、リポジトリ移設だけを理由に触ると差分が大きい
 
 - [ ] 生成物 `index.html` / `miku-xlsx2md.html` を直接編集しない
   - 修正元:
     - `index-src.html`
-    - `xlsx2md-src.html`
-    - 必要に応じて `scripts/build-xlsx2md.mjs`
+    - `miku-xlsx2md-src.html`
+    - 必要に応じて `scripts/build-miku-xlsx2md.mjs`
 
 ## 今回の洗い出しで見つかった代表箇所
 
@@ -114,7 +117,7 @@
   - 旧 GitHub repository URL
   - OGP / Twitter image URL
 
-- `xlsx2md-src.html`
+- `miku-xlsx2md-src.html`
   - 旧 GitHub repository URL
 
 - `CONTRIBUTING.md`

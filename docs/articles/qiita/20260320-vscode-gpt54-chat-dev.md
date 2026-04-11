@@ -208,7 +208,7 @@
 
 ソースコードは GitHub で公開しています。
 
-- https://github.com/igapyon/xlsx2md
+- https://github.com/igapyon/miku-xlsx2md
 
 ## Appendix
 

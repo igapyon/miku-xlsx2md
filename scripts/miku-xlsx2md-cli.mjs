@@ -5,7 +5,7 @@ import { loadXlsx2mdNodeApi } from "./lib/xlsx2md-node-runtime.mjs";
 
 function printHelp() {
   console.log(`Usage:
-  node scripts/xlsx2md-cli.mjs <input.xlsx> [options]
+  node scripts/miku-xlsx2md-cli.mjs <input.xlsx> [options]
 
 Options:
   --out <file>                  Write combined Markdown to this file
