@@ -13,7 +13,7 @@ This project accepts bug reports, feature requests, documentation fixes, tests, 
 
 ## Development Notes
 
-- `index.html` and `xlsx2md.html` are generated files.
+- `index.html` and `miku-xlsx2md.html` are generated files.
 - Edit `index-src.html`, `xlsx2md-src.html`, and files under `src/` instead of editing generated output directly unless regeneration is intentionally part of the change.
 - Run relevant tests before submitting a pull request when possible.
 - When adding or replacing a third-party library, confirm the license and update `THIRD_PARTY_NOTICES.md` when the dependency is shipped, used in runtime/tooling, or otherwise important for downstream notice.
@@ -69,7 +69,7 @@ Contributors may be acknowledged in project history, release notes, or other pro
 
 ## 開発メモ
 
-- `index.html` と `xlsx2md.html` は生成物です。
+- `index.html` と `miku-xlsx2md.html` は生成物です。
 - 生成物を直接編集するのではなく、通常は `index-src.html`、`xlsx2md-src.html`、`src/` 配下を編集してください。
 - Pull Request 前に、可能な範囲で関連テストを実行してください。
 - サードパーティライブラリを追加または差し替える場合は、ライセンスを確認し、配布物・runtime・tooling の観点で告知が必要なら `THIRD_PARTY_NOTICES.md` を更新してください。

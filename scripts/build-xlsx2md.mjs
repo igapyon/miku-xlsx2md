@@ -15,7 +15,7 @@ const TARGETS = [
   {
     id: "xlsx2md",
     srcHtml: "xlsx2md-src.html",
-    outHtml: "xlsx2md.html",
+    outHtml: "miku-xlsx2md.html",
     tsOrder: XLSX2MD_APP_TS_ORDER
   }
 ];

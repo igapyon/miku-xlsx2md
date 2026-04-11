@@ -154,7 +154,7 @@ slide: false
 
 ブラウザですぐ試せる実行ページは、次の URL です。
 
-- https://igapyon.github.io/xlsx2md/xlsx2md.html
+- https://igapyon.github.io/miku-xlsx2md/miku-xlsx2md.html
 
 ソースコードは GitHub で公開しています。
 
