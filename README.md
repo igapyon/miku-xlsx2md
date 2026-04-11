@@ -59,7 +59,7 @@
 
 ## How to use
 
-1. Open `xlsx2md.html` in a web browser
+1. Open `miku-xlsx2md.html` in a web browser
 2. Select an `.xlsx` file
 3. After loading, Markdown for all sheets is generated automatically
 4. Optionally choose output encoding and BOM settings
@@ -147,7 +147,17 @@ In the browser UI, `utf-8`, `utf-16le`, `utf-16be`, `utf-32le`, and `utf-32be` s
 - Testing: Vitest and jsdom
 - UI dependency: `@material/web`
 
-`index.html` and `xlsx2md.html` are generated files. Edit `index-src.html` and `xlsx2md-src.html` instead.
+`index.html` and `miku-xlsx2md.html` are generated files. Edit `index-src.html` and `miku-xlsx2md-src.html` instead.
+
+## Naming
+
+- Repository name: `miku-xlsx2md`
+- Published single-file app: `miku-xlsx2md.html`
+- Product / internal name: `xlsx2md`
+- Display name: `Mikuku's xlsx2md`
+
+This repository was moved from `xlsx2md` to `miku-xlsx2md`.
+Public URLs and the published HTML file use `miku-xlsx2md`, while internal identifiers, script names, and specification document names may continue to use `xlsx2md`.
 
 ## How it works
 
@@ -251,7 +261,7 @@ The generated Markdown can then be previewed as a readable document.
 
 ## How to use
 
-1. Webブラウザで `xlsx2md.html` を開く
+1. Webブラウザで `miku-xlsx2md.html` を開く
 2. `.xlsx` ファイルを選択する
 3. 読み込み後、自動で全シートの Markdown が生成される
 4. 必要に応じて出力エンコーディングと BOM を選ぶ
@@ -348,7 +358,17 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 - テスト: Vitest / jsdom
 - UI 依存: `@material/web`
 
-`index.html` と `xlsx2md.html` は生成物です。編集は `index-src.html` と `xlsx2md-src.html` に対して行ってください。
+`index.html` と `miku-xlsx2md.html` は生成物です。編集は `index-src.html` と `miku-xlsx2md-src.html` に対して行ってください。
+
+## 命名方針
+
+- リポジトリ名: `miku-xlsx2md`
+- 公開する Single-file App: `miku-xlsx2md.html`
+- プロダクト名 / 内部名: `xlsx2md`
+- 表示名: `Mikuku's xlsx2md`
+
+このリポジトリは `xlsx2md` から `miku-xlsx2md` へ移設しました。
+公開 URL や公開 HTML 名は `miku-xlsx2md` を使いますが、内部識別子、スクリプト名、仕様書名には `xlsx2md` が残ることがあります。
 
 ## How it works
 

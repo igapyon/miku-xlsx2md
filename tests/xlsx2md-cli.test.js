@@ -22,7 +22,7 @@ describe("xlsx2md cli", () => {
     try {
       const startedAt = performance.now();
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath
@@ -45,7 +45,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath
@@ -68,7 +68,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--zip",
         outputPath
@@ -85,7 +85,7 @@ describe("xlsx2md cli", () => {
 
   it("reports the input workbook when the command fails", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/does-not-exist.xlsx")
     ], {
       cwd: path.resolve(__dirname, "..")
@@ -96,7 +96,7 @@ describe("xlsx2md cli", () => {
 
   it("prints help and exits successfully", async () => {
     const result = await execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       "--help"
     ], {
       cwd: path.resolve(__dirname, "..")
@@ -114,7 +114,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an unknown option", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--unknown-option"
     ], {
@@ -129,7 +129,7 @@ describe("xlsx2md cli", () => {
 
     try {
       const result = await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
         "--summary"
       ], {
@@ -150,7 +150,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath,
@@ -180,7 +180,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath,
@@ -206,7 +206,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath,
@@ -232,7 +232,7 @@ describe("xlsx2md cli", () => {
 
     try {
       await execFileAsync(process.execPath, [
-        path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
         fixturePath,
         "--out",
         outputPath,
@@ -250,7 +250,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid output mode", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--output-mode",
       "invalid"
@@ -263,7 +263,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid formatting mode", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--formatting-mode",
       "invalid"
@@ -276,7 +276,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid shape details mode", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--shape-details",
       "invalid"
@@ -289,7 +289,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid table detection mode", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--table-detection-mode",
       "invalid"
@@ -302,7 +302,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid encoding", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--encoding",
       "invalid"
@@ -315,7 +315,7 @@ describe("xlsx2md cli", () => {
 
   it("fails for an invalid BOM mode", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--bom",
       "invalid"
@@ -328,7 +328,7 @@ describe("xlsx2md cli", () => {
 
   it("fails when BOM is enabled for shift_jis", async () => {
     await expect(execFileAsync(process.execPath, [
-      path.resolve(__dirname, "../scripts/xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
       path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
       "--encoding",
       "shift_jis",

@@ -14,8 +14,8 @@ const TARGETS = [
   },
   {
     id: "xlsx2md",
-    srcHtml: "xlsx2md-src.html",
-    outHtml: "xlsx2md.html",
+    srcHtml: "miku-xlsx2md-src.html",
+    outHtml: "miku-xlsx2md.html",
     tsOrder: XLSX2MD_APP_TS_ORDER
   }
 ];
@@ -31,7 +31,7 @@ for (const target of TARGETS) {
   const output = buildSingleHtmlFromSource(sourceWithBuildDate, srcPath, ROOT);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, output, "utf8");
-  console.log(`[build:xlsx2md] generated ${target.outHtml}`);
+  console.log(`[build:miku-xlsx2md] generated ${target.outHtml}`);
 }
 
 function formatBuildDate(date = new Date()) {
@@ -45,8 +45,12 @@ async function loadTypeScriptModule() {
   try {
     const module = await import("typescript");
     return module.default || module;
-  } catch (_error) {
-    return null;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      "TypeScript is required for build. Install dependencies before running `npm run build`.\n" +
+      `Cause: ${reason}`
+    );
   }
 }
 
@@ -59,35 +63,27 @@ function transpileTypeScript(target, tsModule) {
     );
 
     const source = fs.readFileSync(tsPath, "utf8");
-    let outputText = source;
-    if (tsModule) {
-      const result = tsModule.transpileModule(source, {
-        compilerOptions: {
-          target: tsModule.ScriptTarget.ES2019,
-          module: tsModule.ModuleKind.None,
-          lib: ["ES2020", "DOM"],
-          strict: false,
-          skipLibCheck: true
-        },
-        reportDiagnostics: true,
-        fileName: tsPath
-      });
+    const result = tsModule.transpileModule(source, {
+      compilerOptions: {
+        target: tsModule.ScriptTarget.ES2019,
+        module: tsModule.ModuleKind.None,
+        lib: ["ES2020", "DOM"],
+        strict: false,
+        skipLibCheck: true
+      },
+      reportDiagnostics: true,
+      fileName: tsPath
+    });
 
-      if (result.diagnostics && result.diagnostics.length > 0) {
-        const errors = result.diagnostics
-          .filter((diagnostic) => diagnostic.category === tsModule.DiagnosticCategory.Error)
-          .map((diagnostic) => tsModule.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
-        if (errors.length > 0) {
-          throw new Error(`TypeScript transpile error in ${relTsPath}:\n${errors.join("\n")}`);
-        }
+    if (result.diagnostics && result.diagnostics.length > 0) {
+      const errors = result.diagnostics
+        .filter((diagnostic) => diagnostic.category === tsModule.DiagnosticCategory.Error)
+        .map((diagnostic) => tsModule.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
+      if (errors.length > 0) {
+        throw new Error(`TypeScript transpile error in ${relTsPath}:\n${errors.join("\n")}`);
       }
-      outputText = result.outputText;
-    } else {
-      console.warn(
-        `[build:xlsx2md] typescript not found. copied ${relTsPath} -> ${relTsPath.replace("/ts/", "/js/").replace(/\.ts$/, ".js")}`
-      );
     }
-
+    const outputText = result.outputText;
     fs.mkdirSync(path.dirname(jsPath), { recursive: true });
     fs.writeFileSync(jsPath, outputText, "utf8");
   }
