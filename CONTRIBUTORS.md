@@ -1,6 +1,6 @@
 # Contributors
 
-This project includes contributions, feedback, and improvement suggestions from the following people. Thank you for helping improve `xlsx2md`.
+This project includes contributions, feedback, and improvement suggestions from the following people. Thank you for helping improve `miku-xlsx2md`.
 
 - Senbei3
   - Helped improve ZIP UTF-8 filename handling by pointing out that Japanese file names were not being handled correctly.

@@ -38,4 +38,14 @@ describe("xlsx2md node runtime", () => {
     expect(combined.fileName).toBe("xlsx2md-basic-sample01.md");
     expect(combined.content).toContain("# ");
   });
+
+  it("exposes markdown option definitions for non-browser callers", () => {
+    const api = loadXlsx2mdNodeApi({
+      rootDir: path.resolve(__dirname, "..")
+    });
+
+    expect(api.markdownOptions.OUTPUT_MODES).toContain("display");
+    expect(api.markdownOptions.FORMATTING_MODES).toContain("github");
+    expect(api.markdownOptions.normalizeTableDetectionMode("border-priority")).toBe("border");
+  });
 });

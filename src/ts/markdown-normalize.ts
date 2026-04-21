@@ -6,11 +6,15 @@
 (() => {
   const moduleRegistry = getXlsx2mdModuleRegistry();
   const MARKDOWN_UNSAFE_UNICODE_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u206F\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]/g;
+  const MARKDOWN_LINE_BREAK_REGEX = /\r\n?|\n/g;
+
+  function normalizeMarkdownNewlines(text: string, replacement = "\n"): string {
+    return String(text || "").replace(MARKDOWN_LINE_BREAK_REGEX, replacement);
+  }
 
   function normalizeMarkdownText(text: string): string {
-    return String(text || "")
+    return normalizeMarkdownNewlines(String(text || ""), " ")
       .replace(MARKDOWN_UNSAFE_UNICODE_REGEX, " ")
-      .replace(/\r\n?|\n/g, " ")
       .replace(/\t/g, " ");
   }
 
@@ -31,6 +35,7 @@
   }
 
   const markdownNormalizeApi = {
+    normalizeMarkdownNewlines,
     normalizeMarkdownText,
     escapeMarkdownPipes,
     normalizeMarkdownTableCell,

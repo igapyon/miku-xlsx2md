@@ -15,6 +15,7 @@
     xmlToDocument: (xmlText: string) => Document;
   };
   type MarkdownNormalizeApi = {
+    normalizeMarkdownNewlines: (text: string, replacement?: string) => string;
     normalizeMarkdownText: (text: string) => string;
     normalizeMarkdownHeadingText: (text: string) => string;
     normalizeMarkdownListItemText: (text: string) => string;
@@ -41,6 +42,34 @@
       encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
       bom?: "off" | "on" | string | null;
     }) => string;
+  };
+  type MarkdownOptionsApi = {
+    OUTPUT_MODES: readonly ["display", "raw", "both"];
+    FORMATTING_MODES: readonly ["plain", "github"];
+    TABLE_DETECTION_MODES: readonly ["balanced", "border"];
+    TABLE_DETECTION_MODE_ALIASES: Record<string, "balanced" | "border">;
+    normalizeOutputMode: (value?: string | null) => "display" | "raw" | "both";
+    normalizeFormattingMode: (value?: string | null) => "plain" | "github";
+    normalizeTableDetectionMode: (value?: string | null) => "balanced" | "border";
+    resolveMarkdownOptions: (options?: {
+      treatFirstRowAsHeader?: boolean;
+      trimText?: boolean;
+      removeEmptyRows?: boolean;
+      removeEmptyColumns?: boolean;
+      includeShapeDetails?: boolean;
+      outputMode?: "display" | "raw" | "both" | string;
+      formattingMode?: "plain" | "github" | string;
+      tableDetectionMode?: "balanced" | "border" | string;
+    }) => {
+      treatFirstRowAsHeader: boolean;
+      trimText: boolean;
+      removeEmptyRows: boolean;
+      removeEmptyColumns: boolean;
+      includeShapeDetails: boolean;
+      outputMode: "display" | "raw" | "both";
+      formattingMode: "plain" | "github";
+      tableDetectionMode: "balanced" | "border";
+    };
   };
   type Xlsx2mdRichTextParserModule<TCell> = {
     createRichTextParserApi: (deps: {
@@ -229,6 +258,9 @@
       }
     ) => { fileName: string; content: string; data: Uint8Array; mimeType: string };
     renderMarkdownTable: (rows: string[][], treatFirstRowAsHeader: boolean) => string;
+    stripWorkbookExtension: (workbookName: string) => string;
+    createCombinedMarkdownFileName: (workbookName: string) => string;
+    createExportEntryName: (relativePath: string) => string;
     createOutputFileName: (
       workbookName: string,
       sheetIndex: number,
@@ -238,6 +270,15 @@
     ) => string;
     createSummaryText: (markdownFile: TMarkdownFile) => string;
     createCombinedMarkdownExportFile: (workbook: TParsedWorkbook, markdownFiles: TMarkdownFile[]) => { fileName: string; content: string };
+    createMarkdownExportEntry: (
+      workbook: TParsedWorkbook,
+      markdownFiles: TMarkdownFile[],
+      options?: {
+        encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
+        bom?: "off" | "on" | string | null;
+      }
+    ) => TExportEntry | null;
+    createAssetExportEntries: (workbook: TParsedWorkbook) => TExportEntry[];
     createExportEntries: (
       workbook: TParsedWorkbook,
       markdownFiles: TMarkdownFile[],
@@ -490,6 +531,7 @@
     requireXlsx2mdMarkdownNormalize?: () => MarkdownNormalizeApi;
     requireXlsx2mdZipIo?: () => ZipIoApi;
     requireXlsx2mdTextEncoding?: () => TextEncodingApi;
+    requireXlsx2mdMarkdownOptions?: () => MarkdownOptionsApi;
     getXlsx2mdDrawingHelperModule?: () => Xlsx2mdDrawingHelperModule | null;
     requireXlsx2mdNarrativeStructureModule?: <TNarrativeBlock>() => Xlsx2mdNarrativeStructureModule<TNarrativeBlock>;
     requireXlsx2mdRichTextPlainFormatterModule?: () => Xlsx2mdRichTextPlainFormatterModule;
@@ -559,6 +601,16 @@
     }).getXlsx2mdModuleRegistry().requireModule<TextEncodingApi>(
       "textEncoding",
       "xlsx2md text encoding module is not loaded"
+    );
+  };
+  (globalThis as typeof globalThis & {
+    requireXlsx2mdMarkdownOptions?: () => MarkdownOptionsApi;
+  }).requireXlsx2mdMarkdownOptions = function requireXlsx2mdMarkdownOptions(): MarkdownOptionsApi {
+    return (globalThis as typeof globalThis & {
+      getXlsx2mdModuleRegistry: () => Xlsx2mdModuleRegistry;
+    }).getXlsx2mdModuleRegistry().requireModule<MarkdownOptionsApi>(
+      "markdownOptions",
+      "xlsx2md markdown options module is not loaded"
     );
   };
   (globalThis as typeof globalThis & {

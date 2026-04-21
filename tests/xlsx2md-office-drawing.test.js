@@ -1,26 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry, loadRuntimeEnv } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const officeDrawingCode = readFileSync(
-  path.resolve(__dirname, "../src/js/office-drawing.js"),
-  "utf8"
-);
-
 function bootOfficeDrawing() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  loadRuntimeEnv(__dirname);
-  new Function(officeDrawingCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("officeDrawing");
+  return bootRegisteredModule(__dirname, [
+    "src/js/runtime-env.js",
+    "src/js/office-drawing.js"
+  ], "officeDrawing");
 }
 
 function parseXml(xmlText) {

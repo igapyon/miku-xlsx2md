@@ -201,133 +201,93 @@
     }
     function evaluateFunctionCall(name, args, context) {
         const upperName = name.toUpperCase();
-        switch (upperName) {
-            case "IF":
-                return evaluateIf(args, context);
-            case "IFERROR":
-                return evaluateIfError(args, context);
-            case "AND":
-                return evaluateAnd(args, context);
-            case "OR":
-                return evaluateOr(args, context);
-            case "NOT":
-                return evaluateNot(args, context);
-            case "DATE":
-                return evaluateDate(args, context);
-            case "VALUE":
-                return evaluateValue(args, context);
-            case "ROUND":
-                return evaluateRound(args, context, "round");
-            case "ROUNDUP":
-                return evaluateRound(args, context, "up");
-            case "ROUNDDOWN":
-                return evaluateRound(args, context, "down");
-            case "INT":
-                return evaluateInt(args, context);
-            case "ABS":
-                return evaluateAbs(args, context);
-            case "SUM":
-                return evaluateSum(args, context);
-            case "SUMPRODUCT":
-                return evaluateSumProduct(args, context);
-            case "REPT":
-                return evaluateRept(args, context);
-            case "SUBSTITUTE":
-                return evaluateSubstitute(args, context);
-            case "MATCH":
-                return evaluateMatch(args, context);
-            case "INDEX":
-                return evaluateIndex(args, context);
-            case "VLOOKUP":
-                return evaluateVLookup(args, context);
-            case "HLOOKUP":
-                return evaluateHLookup(args, context);
-            case "XLOOKUP":
-                return evaluateXLookup(args, context);
-            case "TEXT":
-                return evaluateText(args, context);
-            case "TODAY":
-                return evaluateToday(context);
-            case "WEEKDAY":
-                return evaluateWeekday(args, context);
-            case "DATEVALUE":
-                return evaluateDateValue(args, context);
-            case "LEN":
-                return evaluateLen(args, context);
-            case "LOWER":
-                return evaluateLower(args, context);
-            case "FIND":
-                return evaluateFind(args, context, false);
-            case "SEARCH":
-                return evaluateFind(args, context, true);
-            case "LEFT":
-                return evaluateLeft(args, context);
-            case "RIGHT":
-                return evaluateRight(args, context);
-            case "MID":
-                return evaluateMid(args, context);
-            case "TRIM":
-                return evaluateTrim(args, context);
-            case "REPLACE":
-                return evaluateReplace(args, context);
-            case "DAY":
-                return evaluateDay(args, context);
-            case "MONTH":
-                return evaluateMonth(args, context);
-            case "YEAR":
-                return evaluateYear(args, context);
-            case "SUBTOTAL":
-                return evaluateSubtotal(args, context);
-            case "UPPER":
-                return evaluateUpper(args, context);
-            case "CONCATENATE":
-                return evaluateConcatenate(args, context);
-            case "ISBLANK":
-                return evaluateIsBlank(args, context);
-            case "ISNUMBER":
-                return evaluateIsNumber(args, context);
-            case "ISTEXT":
-                return evaluateIsText(args, context);
-            case "ISERROR":
-                return evaluateIsError(args, context);
-            case "ISNA":
-                return evaluateIsNa(args, context);
-            case "NA":
-                return evaluateNa();
-            case "MIN":
-                return evaluateMin(args, context);
-            case "MAX":
-                return evaluateMax(args, context);
-            case "AVERAGE":
-                return evaluateAverage(args, context);
-            case "COLUMN":
-                return evaluateColumn(args, context);
-            case "ROW":
-                return evaluateRow(args, context);
-            case "EDATE":
-                return evaluateEDate(args, context);
-            case "EOMONTH":
-                return evaluateEoMonth(args, context);
-            case "COUNTIF":
-                return evaluateCountIf(args, context);
-            case "COUNTIFS":
-                return evaluateCountIfs(args, context);
-            case "COUNT":
-                return evaluateCount(args, context);
-            case "COUNTA":
-                return evaluateCountA(args, context);
-            case "SUMIF":
-                return evaluateSumIf(args, context);
-            case "SUMIFS":
-                return evaluateSumIfs(args, context);
-            case "AVERAGEIF":
-                return evaluateAverageIf(args, context);
-            case "AVERAGEIFS":
-                return evaluateAverageIfs(args, context);
-            default:
-                throw new Error(`Unsupported formula function: ${name}`);
+        const evaluator = FORMULA_FUNCTION_EVALUATORS[upperName];
+        if (!evaluator) {
+            throw new Error(`Unsupported formula function: ${name}`);
         }
+        return evaluator(args, context);
     }
+    const LOGICAL_FUNCTION_EVALUATORS = {
+        IF: evaluateIf,
+        IFERROR: evaluateIfError,
+        AND: evaluateAnd,
+        OR: evaluateOr,
+        NOT: evaluateNot
+    };
+    const NUMERIC_FUNCTION_EVALUATORS = {
+        ABS: evaluateAbs,
+        INT: evaluateInt,
+        ROUND: (args, context) => evaluateRound(args, context, "round"),
+        ROUNDUP: (args, context) => evaluateRound(args, context, "up"),
+        ROUNDDOWN: (args, context) => evaluateRound(args, context, "down"),
+        SUM: evaluateSum,
+        SUMPRODUCT: evaluateSumProduct,
+        MIN: evaluateMin,
+        MAX: evaluateMax,
+        AVERAGE: evaluateAverage,
+        COUNT: evaluateCount,
+        COUNTA: evaluateCountA,
+        COUNTIF: evaluateCountIf,
+        COUNTIFS: evaluateCountIfs,
+        SUMIF: evaluateSumIf,
+        SUMIFS: evaluateSumIfs,
+        AVERAGEIF: evaluateAverageIf,
+        AVERAGEIFS: evaluateAverageIfs,
+        SUBTOTAL: evaluateSubtotal
+    };
+    const DATE_FUNCTION_EVALUATORS = {
+        DATE: evaluateDate,
+        DATEVALUE: evaluateDateValue,
+        TODAY: (_args, context) => evaluateToday(context),
+        WEEKDAY: evaluateWeekday,
+        DAY: evaluateDay,
+        MONTH: evaluateMonth,
+        YEAR: evaluateYear,
+        EDATE: evaluateEDate,
+        EOMONTH: evaluateEoMonth
+    };
+    const TEXT_FUNCTION_EVALUATORS = {
+        VALUE: evaluateValue,
+        REPT: evaluateRept,
+        SUBSTITUTE: evaluateSubstitute,
+        TEXT: evaluateText,
+        LEN: evaluateLen,
+        LOWER: evaluateLower,
+        UPPER: evaluateUpper,
+        FIND: (args, context) => evaluateFind(args, context, false),
+        SEARCH: (args, context) => evaluateFind(args, context, true),
+        LEFT: evaluateLeft,
+        RIGHT: evaluateRight,
+        MID: evaluateMid,
+        TRIM: evaluateTrim,
+        REPLACE: evaluateReplace,
+        CONCATENATE: evaluateConcatenate
+    };
+    const LOOKUP_FUNCTION_EVALUATORS = {
+        MATCH: evaluateMatch,
+        INDEX: evaluateIndex,
+        VLOOKUP: evaluateVLookup,
+        HLOOKUP: evaluateHLookup,
+        XLOOKUP: evaluateXLookup,
+        COLUMN: evaluateColumn,
+        ROW: evaluateRow
+    };
+    const INFORMATION_FUNCTION_EVALUATORS = {
+        ISBLANK: evaluateIsBlank,
+        ISNUMBER: evaluateIsNumber,
+        ISTEXT: evaluateIsText,
+        ISERROR: evaluateIsError,
+        ISNA: evaluateIsNa,
+        NA: () => evaluateNa()
+    };
+    const FORMULA_FUNCTION_EVALUATORS = {
+        ...LOGICAL_FUNCTION_EVALUATORS,
+        ...NUMERIC_FUNCTION_EVALUATORS,
+        ...DATE_FUNCTION_EVALUATORS,
+        ...TEXT_FUNCTION_EVALUATORS,
+        ...LOOKUP_FUNCTION_EVALUATORS,
+        ...INFORMATION_FUNCTION_EVALUATORS
+    };
     function evaluateIf(args, context) {
         const condition = toBoolean(evaluateFormulaAst(args[0], context));
         if (condition) {

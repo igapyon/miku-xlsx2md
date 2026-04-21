@@ -22,6 +22,9 @@
     globalThis.requireXlsx2mdTextEncoding = function requireXlsx2mdTextEncoding() {
         return globalThis.getXlsx2mdModuleRegistry().requireModule("textEncoding", "xlsx2md text encoding module is not loaded");
     };
+    globalThis.requireXlsx2mdMarkdownOptions = function requireXlsx2mdMarkdownOptions() {
+        return globalThis.getXlsx2mdModuleRegistry().requireModule("markdownOptions", "xlsx2md markdown options module is not loaded");
+    };
     globalThis.requireXlsx2mdMarkdownEscape = function requireXlsx2mdMarkdownEscape() {
         return globalThis.getXlsx2mdModuleRegistry().requireModule("markdownEscape", "xlsx2md markdown escape module is not loaded");
     };

@@ -1,26 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry, loadRuntimeEnv } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const sheetAssetsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/sheet-assets.js"),
-  "utf8"
-);
-
 function bootSheetAssets() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  loadRuntimeEnv(__dirname);
-  new Function(sheetAssetsCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("sheetAssets");
+  return bootRegisteredModule(__dirname, [
+    "src/js/runtime-env.js",
+    "src/js/sheet-assets.js"
+  ], "sheetAssets");
 }
 
 function createDeps() {

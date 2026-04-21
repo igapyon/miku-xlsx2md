@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This document lists third-party software and reference materials used or referred to by `xlsx2md`.
+This document lists third-party software and reference materials used or referred to by `miku-xlsx2md`.
 
 ## Third-party software
 
@@ -40,7 +40,7 @@ This document lists third-party software and reference materials used or referre
 
 # 第三者告知
 
-この文書は、`xlsx2md` が利用または参照している第三者ソフトウェアおよび参考資料を記載したものです。
+この文書は、`miku-xlsx2md` が利用または参照している第三者ソフトウェアおよび参考資料を記載したものです。
 
 ## 第三者ソフトウェア
 

@@ -1,49 +1,17 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 import { expectModeResults } from "./helpers/mode-assertions.js";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRichTextRenderer as bootRichTextRendererModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const markdownEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-escape.js"),
-  "utf8"
-);
-const richTextParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-parser.js"),
-  "utf8"
-);
-const richTextPlainFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-plain-formatter.js"),
-  "utf8"
-);
-const richTextGithubFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-github-formatter.js"),
-  "utf8"
-);
-const richTextRendererCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-renderer.js"),
-  "utf8"
-);
-
 function bootRichTextRenderer() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(markdownEscapeCode)();
-  new Function(richTextParserCode)();
-  new Function(richTextPlainFormatterCode)();
-  new Function(richTextGithubFormatterCode)();
-  new Function(richTextRendererCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("richTextRenderer")
-    .createRichTextRendererApi({
-      normalizeMarkdownText: (text) => String(text || "").replace(/\r\n?|\n/g, " ").replace(/\t/g, " ")
-    });
+  return bootRichTextRendererModule(__dirname);
 }
 
 describe("xlsx2md rich text renderer", () => {

@@ -4,6 +4,11 @@
 
 miku-xlsx2md is one of the tools in Mikuku's software series.
 
+Links:
+
+- Web app: <https://igapyon.github.io/miku-xlsx2md/>
+- Repository: <https://github.com/igapyon/miku-xlsx2md>
+
 ## What is this?
 
 `miku-xlsx2md` is a single-file web app that reads Excel (`.xlsx`) files locally and extracts prose, tables, and images as Markdown.
@@ -209,6 +214,11 @@ The generated Markdown can then be previewed as a readable document.
 ## What is this?
 
 `miku-xlsx2md` は Mikuku's software series を構成するツールのひとつです。
+
+リンク:
+
+- Web app: <https://igapyon.github.io/miku-xlsx2md/>
+- Repository: <https://github.com/igapyon/miku-xlsx2md>
 
 `miku-xlsx2md` は、Excel (`.xlsx`) をローカルで読み込み、地の文・表・画像を Markdown として抽出する Single-file Web App です。
 

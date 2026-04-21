@@ -1,35 +1,16 @@
 // @vitest-environment jsdom
 
-import { Blob as NodeBlob } from "node:buffer";
-import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DecompressionStream as NodeDecompressionStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const nodeRequire = createRequire(import.meta.url);
-
-if (typeof globalThis.Blob === "undefined" || typeof globalThis.Blob.prototype?.stream !== "function") {
-  globalThis.Blob = NodeBlob;
-}
-globalThis.DecompressionStream ??= NodeDecompressionStream;
-globalThis.__xlsx2mdNodeRequire ??= nodeRequire;
-
-const zipIoCode = readFileSync(
-  path.resolve(__dirname, "../src/js/zip-io.js"),
-  "utf8"
-);
 
 function bootZipIo() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(zipIoCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("zipIo");
+  return bootRegisteredModule(__dirname, ["src/js/zip-io.js"], "zipIo");
 }
 
 describe("xlsx2md zip io", () => {
@@ -126,7 +107,7 @@ describe("xlsx2md zip io", () => {
   it("falls back to node zlib inflateRawSync when deflate-raw streams are unavailable", async () => {
     const api = bootZipIo();
     const encoder = new TextEncoder();
-    const zlib = nodeRequire("node:zlib");
+    const zlib = globalThis.__xlsx2mdNodeRequire("node:zlib");
     const fileName = "output/test.txt";
     const fileNameBytes = encoder.encode(fileName);
     const original = encoder.encode("fallback");

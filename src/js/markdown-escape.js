@@ -4,11 +4,54 @@
  */
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
-    function escapeMarkdownLineStart(text) {
+    const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
+    function escapeMarkdownLineStartSegment(text) {
         return String(text || "")
             .replace(/^(\s*)([#>])/u, "$1\\$2")
             .replace(/^(\s*)([-+*])(\s+)/u, "$1\\$2$3")
             .replace(/^(\s*)(\d+)\.(\s+)/u, "$1$2\\.$3");
+    }
+    function escapeMarkdownLineStart(text) {
+        return markdownNormalizeHelper
+            .normalizeMarkdownNewlines(text)
+            .split("\n")
+            .map((line) => escapeMarkdownLineStartSegment(line))
+            .join("\n");
+    }
+    function getEscapedMarkdownLiteralText(ch, atLineStart, nextChar) {
+        if (ch === "\\")
+            return "\\\\";
+        if (ch === "&")
+            return "&amp;";
+        if (ch === "<")
+            return "&lt;";
+        if (ch === ">")
+            return "&gt;";
+        if (/[`*_{}\[\]()!|~]/.test(ch))
+            return `\\${ch}`;
+        if (atLineStart && ch === "#")
+            return `\\${ch}`;
+        if (atLineStart && /[-+*]/.test(ch) && /\s/u.test(nextChar))
+            return `\\${ch}`;
+        return null;
+    }
+    function parseOrderedListMarker(source, index, atLineStart) {
+        if (!atLineStart || !/\d/u.test(source[index] || "")) {
+            return null;
+        }
+        let digits = source[index];
+        let cursor = index + 1;
+        while (cursor < source.length && /\d/u.test(source[cursor])) {
+            digits += source[cursor];
+            cursor += 1;
+        }
+        if (source[cursor] !== "." || !/\s/u.test(source[cursor + 1] || "")) {
+            return null;
+        }
+        return {
+            digits,
+            dotIndex: cursor
+        };
     }
     function escapeMarkdownLiteralParts(text) {
         const source = String(text || "");
@@ -30,52 +73,18 @@
             const ch = source[index];
             const atLineStart = index === 0;
             const next = source[index + 1] || "";
-            if (ch === "\\") {
-                pushEscaped("\\\\", ch);
+            const escapedText = getEscapedMarkdownLiteralText(ch, atLineStart, next);
+            if (escapedText) {
+                pushEscaped(escapedText, ch);
                 continue;
             }
-            if (ch === "&") {
-                pushEscaped("&amp;", ch);
+            const orderedListMarker = parseOrderedListMarker(source, index, atLineStart);
+            if (orderedListMarker) {
+                pushTextBuffer();
+                parts.push({ kind: "text", text: orderedListMarker.digits, rawText: orderedListMarker.digits });
+                parts.push({ kind: "escaped", text: "\\.", rawText: "." });
+                index = orderedListMarker.dotIndex;
                 continue;
-            }
-            if (ch === "<") {
-                pushEscaped("&lt;", ch);
-                continue;
-            }
-            if (ch === ">") {
-                if (atLineStart) {
-                    pushEscaped("&gt;", ch);
-                    continue;
-                }
-                pushEscaped("&gt;", ch);
-                continue;
-            }
-            if (/[`*_{}\[\]()!|~]/.test(ch)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /[#]/.test(ch)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /[-+*]/.test(ch) && /\s/u.test(next)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /\d/u.test(ch)) {
-                let digitRun = ch;
-                let cursor = index + 1;
-                while (cursor < source.length && /\d/u.test(source[cursor])) {
-                    digitRun += source[cursor];
-                    cursor += 1;
-                }
-                if (source[cursor] === "." && /\s/u.test(source[cursor + 1] || "")) {
-                    pushTextBuffer();
-                    parts.push({ kind: "text", text: digitRun, rawText: digitRun });
-                    parts.push({ kind: "escaped", text: "\\.", rawText: "." });
-                    index = cursor;
-                    continue;
-                }
             }
             buffer += ch;
         }
@@ -83,8 +92,8 @@
         return parts;
     }
     function escapeMarkdownLiteralText(text) {
-        return String(text || "")
-            .replace(/\r\n?/g, "\n")
+        return markdownNormalizeHelper
+            .normalizeMarkdownNewlines(text)
             .split("\n")
             .map((line) => escapeMarkdownLiteralParts(line).map((part) => part.text).join(""))
             .join("\n");

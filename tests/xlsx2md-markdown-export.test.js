@@ -1,45 +1,22 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const zipIoCode = readFileSync(
-  path.resolve(__dirname, "../src/js/zip-io.js"),
-  "utf8"
-);
-const markdownNormalizeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-normalize.js"),
-  "utf8"
-);
-const markdownExportCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-export.js"),
-  "utf8"
-);
-const textEncodingCode = readFileSync(
-  path.resolve(__dirname, "../src/js/text-encoding.js"),
-  "utf8"
-);
-const markdownTableEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-table-escape.js"),
-  "utf8"
-);
-
 function bootMarkdownExport() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(zipIoCode)();
-  new Function(markdownNormalizeCode)();
-  new Function(markdownTableEscapeCode)();
-  new Function(textEncodingCode)();
-  new Function(markdownExportCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("markdownExport");
+  return bootRegisteredModule(__dirname, [
+    "src/js/zip-io.js",
+    "src/js/markdown-normalize.js",
+    "src/js/markdown-table-escape.js",
+    "src/js/text-encoding.js",
+    "src/js/markdown-export.js"
+  ], "markdownExport");
 }
 
 describe("xlsx2md markdown export", () => {
@@ -108,6 +85,11 @@ describe("xlsx2md markdown export", () => {
   it("creates sanitized output file names without mode suffixes", () => {
     const api = bootMarkdownExport();
 
+    expect(api.stripWorkbookExtension("book name.xlsx")).toBe("book name");
+    expect(api.stripWorkbookExtension("book name")).toBe("book name");
+    expect(api.createCombinedMarkdownFileName("book name.xlsx")).toBe("book name.md");
+    expect(api.createCombinedMarkdownFileName("")).toBe("workbook.md");
+    expect(api.createExportEntryName("assets/pic.png")).toBe("output/assets/pic.png");
     expect(api.createOutputFileName("book name.xlsx", 2, "A/B:東京", "both")).toBe(
       "book_name_002_A_B_東京.md"
     );
@@ -197,6 +179,33 @@ describe("xlsx2md markdown export", () => {
     expect(extracted.get("output/shapes/shape_001.svg")).toEqual(new Uint8Array([4, 5]));
   });
 
+  it("creates asset entries without markdown and skips incomplete shape svg assets", () => {
+    const api = bootMarkdownExport();
+    const workbook = {
+      name: "sample.xlsx",
+      sheets: [
+        {
+          images: [{ path: "images/pic.png", data: new Uint8Array([1, 2, 3]) }],
+          shapes: [
+            { svgPath: "shapes/shape_001.svg", svgData: new Uint8Array([4, 5]) },
+            { svgPath: null, svgData: new Uint8Array([6]) },
+            { svgPath: "shapes/shape_003.svg", svgData: null }
+          ]
+        }
+      ]
+    };
+
+    expect(api.createMarkdownExportEntry(workbook, [])).toBeNull();
+    expect(api.createAssetExportEntries(workbook)).toEqual([
+      { name: "output/images/pic.png", data: new Uint8Array([1, 2, 3]) },
+      { name: "output/shapes/shape_001.svg", data: new Uint8Array([4, 5]) }
+    ]);
+    expect(api.createExportEntries(workbook, []).map((entry) => entry.name)).toEqual([
+      "output/images/pic.png",
+      "output/shapes/shape_001.svg"
+    ]);
+  });
+
   it("creates encoded payload bytes for UTF-16BE with BOM", () => {
     const api = bootMarkdownExport();
     const payload = api.createCombinedMarkdownExportPayload(
@@ -272,6 +281,34 @@ describe("xlsx2md markdown export", () => {
 
     expect(payload.content).toBe("# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body\n\n## Sheet: Other\n\nOther body");
     expect(payload.content.match(/^# Book: /gm)).toHaveLength(1);
+  });
+
+  it("drops blank lines left after removing duplicate book headings", () => {
+    const api = bootMarkdownExport();
+    const payload = api.createCombinedMarkdownExportFile(
+      { name: "sales.xlsx", sheets: [{ images: [], shapes: [] }] },
+      [{
+        fileName: "sales_001_Summary.md",
+        sheetName: "Summary",
+        markdown: "# Book: sales.xlsx\n\n\n## Sheet: Summary\n\nSummary body",
+        summary: {
+          outputMode: "display",
+          formattingMode: "plain",
+          tableDetectionMode: "balanced",
+          sections: 1,
+          tables: 0,
+          narrativeBlocks: 1,
+          merges: 0,
+          images: 0,
+          charts: 0,
+          cells: 1,
+          tableScores: [],
+          formulaDiagnostics: []
+        }
+      }]
+    );
+
+    expect(payload.content).toBe("# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body");
   });
 
   it("keeps combined export file names stable across modes", () => {

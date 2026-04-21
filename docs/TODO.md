@@ -41,12 +41,34 @@
 - rich text / Markdown renderer の責務整理
   - 現状は `shared-strings.ts` / `styles-parser.ts` / `worksheet-parser.ts` / `sheet-markdown.ts` に加えて、`markdown-escape.ts` / `rich-text-parser.ts` / `rich-text-plain-formatter.ts` / `rich-text-github-formatter.ts` / `markdown-table-escape.ts` へ段階分離済み
   - `plain` と `github` の責務境界は formatter 分離でかなり明確になった
+  - `sheet-markdown.ts` は、セル文字列化 / narrative item 構築 / section block 判定 / grouped body 組み立て / asset section 生成 / render state 収集 / Markdown summary 組み立てまで分離済み
+  - `sheet-markdown.ts` の整理に合わせて `tests/xlsx2md-sheet-markdown.test.js` に直接テストを追加し、回帰確認しやすくした
   - 必要なら token ベースの中間表現をさらに細粒度化する
   - `styledText.parts` は `text / escaped` と `rawText` を持つ段階まで進めたので、次はそれを renderer policy にどう使うかを詰める
   - GUI / CLI の既定値差は今後も注意して確認する
   - rich fixture 回帰:
     - `tests/fixtures/rich/rich-text-github-sample01.xlsx`
     - `tests/fixtures/rich/rich-markdown-escape-sample01.xlsx`
+- 共有型定義の単一正本を作る
+  - `ParsedCell` / `ParsedSheet` / `ParsedWorkbook` / `MarkdownFile` などが `core.ts` / `sheet-markdown.ts` / `formula-resolver.ts` / `module-registry-access.ts` などに重複している
+  - 少なくとも workbook / sheet / formula / markdown export の主要型は共有 `types` へ寄せたい
+  - 型変更時に 1 箇所だけ更新して別モジュールが古い前提のまま残る状態を減らしたい
+- `module-registry-access.ts` の巨大な手書き契約を縮小する
+  - 現状は module registry 越しの API 型を access 層で大きく再定義している
+  - 各モジュールの公開 interface を小さく保ち、access 側の重複定義を減らしたい
+  - 文字列名による結合をすぐにやめなくても、契約の単一正本は作りたい
+- `src/ts` と `src/js` の二重管理コストを下げる
+  - 現状は `src/ts` を正本としつつ、生成済み `src/js` もリポジトリに載せている
+  - レビュー差分が大きくなりやすく、変更コストも高い
+  - build / test / 配布の都合を整理したうえで、どこまで生成物を持つかを見直したい
+- `core.ts` の責務をさらに分割する
+  - 現状でも改善は進んでいるが、型定義・変換フロー・export 周辺の集積点としてはまだ太い
+  - 「中心に何でも集まるファイル」から、薄い orchestration へ寄せたい
+  - 少なくとも workbook model / conversion pipeline / export composition の境界はより明確にしたい
+- formula 系の `評価 / 状態更新 / fallback 制御` をさらに分離する
+  - 現状は AST evaluator / legacy resolver / cached value 優先の方針はあるが、実装では層がまだ混ざる
+  - 例外ベースの未解決制御や、resolver 中での破壊的な cell 更新の境界は整理余地がある
+  - 中長期的には evaluator の返り値と state mutation を分離し、fallback policy を見通しよくしたい
 - Markdown 保存時の UTF-8 BOM 方針を整理する
   - 対象経路: GUI の `Save Markdown`、CLI の `--out`、ZIP 内 Markdown
   - Windows 既定アプリでの文字化け回避と、BOM を嫌う利用者・ツールの両方を考慮する
@@ -123,6 +145,8 @@
 - formula Step 2 の最小 parser 土台は追加済み
 - formula Step 3 の最小 evaluator 土台は追加済み
 - `core.ts` に no-op の `extractSectionBlocks(...)` は追加済み
+- `sheet-markdown.ts` の責務整理を実施し、セル整形 / narrative / section grouping / asset section / render state / summary の分割を進めた
+- `tests/xlsx2md-sheet-markdown.test.js` に回帰テストを追加し、`sheet-markdown` 単体テストは 23 件通過を確認済み
 
 ## 参照
 
