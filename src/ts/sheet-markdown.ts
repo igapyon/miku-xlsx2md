@@ -82,6 +82,13 @@
     endCol: number;
   };
 
+  type SectionAnchor = {
+    startRow: number;
+    startCol: number;
+    endRow: number;
+    endCol: number;
+  };
+
   type ParsedImageAsset = {
     anchor: string;
     filename: string;
@@ -153,6 +160,59 @@
     endRow: number;
     endCol: number;
     shapeIndexes: number[];
+  };
+
+  type ContentSection = {
+    sortRow: number;
+    sortCol: number;
+    markdown: string;
+    kind: "narrative" | "table";
+    narrativeBlock?: NarrativeBlock;
+  };
+
+  type GroupedSection = {
+    block: SectionBlock;
+    entries: ContentSection[];
+  };
+
+  type SheetRenderState = {
+    resolvedOptions: Required<MarkdownOptions>;
+    charts: ParsedChartAsset[];
+    shapes: ParsedShapeAsset[];
+    shapeBlocks: ShapeBlock[];
+    tables: TableCandidate[];
+    narrativeBlocks: NarrativeBlock[];
+    sectionBlocks: SectionBlock[];
+    formulaDiagnostics: MarkdownFile["summary"]["formulaDiagnostics"];
+    sections: ContentSection[];
+    groupedSections: GroupedSection[];
+    body: string;
+    imageSection: string;
+    chartSection: string;
+    shapeSection: string;
+  };
+
+  type CellMarkdownValues = {
+    displayValue: string;
+    rawValue: string;
+    displayMarkdown: string;
+  };
+
+  type CellMarkdownContext = {
+    workbook: ParsedWorkbook | null;
+    sheet: ParsedSheet | null;
+    options: MarkdownOptions;
+  };
+
+  type CellMarkdownRenderer = (
+    cell: ParsedCell,
+    values: CellMarkdownValues,
+    context: CellMarkdownContext
+  ) => string;
+
+  type NarrativeRowSegment = {
+    startCol: number;
+    values: string[];
   };
 
   type MarkdownFile = {
@@ -228,6 +288,7 @@
   };
 
   function createSheetMarkdownApi(deps: SheetMarkdownDeps) {
+    const markdownOptions = requireXlsx2mdMarkdownOptions();
     const richTextRenderer = requireXlsx2mdRichTextRendererModule<ParsedCell>().createRichTextRendererApi({
       normalizeMarkdownText: deps.normalizeMarkdownText
     });
@@ -294,6 +355,64 @@
         : `[${label}](${href})`;
     }
 
+    function createDisplayCellForFormatting(cell: ParsedCell, formattingMode: "plain" | "github"): ParsedCell {
+      if (formattingMode !== "github" || !cell.hyperlink) {
+        return cell;
+      }
+      return {
+        ...cell,
+        textStyle: {
+          ...cell.textStyle,
+          underline: false
+        },
+        richTextRuns: cell.richTextRuns?.map((run) => ({
+          ...run,
+          underline: false
+        })) || null
+      };
+    }
+
+    function createCellMarkdownValues(cell: ParsedCell, formattingMode: "plain" | "github"): CellMarkdownValues {
+      const displayCell = createDisplayCellForFormatting(cell, formattingMode);
+      return {
+        displayValue: richTextRenderer.compactText(String(cell.outputValue || "")),
+        rawValue: richTextRenderer.compactText(String(cell.rawValue || "")),
+        displayMarkdown: richTextRenderer.renderCellDisplayText(displayCell, formattingMode)
+      };
+    }
+
+    function renderCellWithHyperlink(cell: ParsedCell, text: string, context: CellMarkdownContext): string {
+      return renderHyperlinkMarkdown(cell, text, context.workbook, context.sheet, context.options);
+    }
+
+    function renderDisplayModeCell(cell: ParsedCell, values: CellMarkdownValues, context: CellMarkdownContext): string {
+      return renderCellWithHyperlink(cell, values.displayMarkdown, context);
+    }
+
+    function renderRawModeCell(cell: ParsedCell, values: CellMarkdownValues, context: CellMarkdownContext): string {
+      return renderCellWithHyperlink(cell, values.rawValue || values.displayValue, context);
+    }
+
+    function renderBothModeCell(cell: ParsedCell, values: CellMarkdownValues, context: CellMarkdownContext): string {
+      if (values.rawValue && values.rawValue !== values.displayValue) {
+        if (values.displayMarkdown) {
+          return `${renderCellWithHyperlink(cell, values.displayMarkdown, context)} [raw=${values.rawValue}]`;
+        }
+        return `[raw=${values.rawValue}]`;
+      }
+      return renderCellWithHyperlink(cell, values.displayMarkdown || values.rawValue, context);
+    }
+
+    function getCellMarkdownRenderer(outputMode: "display" | "raw" | "both"): CellMarkdownRenderer {
+      if (outputMode === "raw") {
+        return renderRawModeCell;
+      }
+      if (outputMode === "both") {
+        return renderBothModeCell;
+      }
+      return renderDisplayModeCell;
+    }
+
     function formatCellForMarkdown(
       cell: ParsedCell | undefined,
       options: MarkdownOptions,
@@ -301,37 +420,15 @@
       sheet: ParsedSheet | null = null
     ): string {
       if (!cell) return "";
-      const mode = options.outputMode || "display";
-      const formattingMode = options.formattingMode || "plain";
-      const displayCell = formattingMode === "github" && cell.hyperlink
-        ? {
-          ...cell,
-          textStyle: {
-            ...cell.textStyle,
-            underline: false
-          },
-          richTextRuns: cell.richTextRuns?.map((run) => ({
-            ...run,
-            underline: false
-          })) || null
-        }
-        : cell;
-      const displayValue = richTextRenderer.compactText(String(cell.outputValue || ""));
-      const rawValue = richTextRenderer.compactText(String(cell.rawValue || ""));
-      const displayMarkdown = richTextRenderer.renderCellDisplayText(displayCell, formattingMode);
-      if (mode === "raw") {
-        return renderHyperlinkMarkdown(cell, rawValue || displayValue, workbook, sheet, options);
-      }
-      if (mode === "both") {
-        if (rawValue && rawValue !== displayValue) {
-          if (displayMarkdown) {
-            return `${renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options)} [raw=${rawValue}]`;
-          }
-          return `[raw=${rawValue}]`;
-        }
-        return renderHyperlinkMarkdown(cell, displayMarkdown || rawValue, workbook, sheet, options);
-      }
-      return renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options);
+      const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+      const formattingMode = resolvedOptions.formattingMode;
+      const values = createCellMarkdownValues(cell, formattingMode);
+      const renderCell = getCellMarkdownRenderer(resolvedOptions.outputMode);
+      return renderCell(cell, values, {
+        workbook,
+        sheet,
+        options
+      });
     }
 
     function isCellInAnyTable(row: number, col: number, tables: TableCandidate[]): boolean {
@@ -343,8 +440,8 @@
       options: MarkdownOptions,
       workbook: ParsedWorkbook | null = null,
       sheet: ParsedSheet | null = null
-    ): Array<{ startCol: number; values: string[] }> {
-      const segments: Array<{ startCol: number; values: string[] }> = [];
+    ): NarrativeRowSegment[] {
+      const segments: Array<NarrativeRowSegment & { lastCol: number }> = [];
       let current: { startCol: number; values: string[]; lastCol: number } | null = null;
       for (const cell of cells) {
         const value = formatCellForMarkdown(cell, options, workbook, sheet).trim();
@@ -367,12 +464,7 @@
       }));
     }
 
-    function extractNarrativeBlocks(
-      workbook: ParsedWorkbook,
-      sheet: ParsedSheet,
-      tables: TableCandidate[],
-      options: MarkdownOptions = {}
-    ): NarrativeBlock[] {
+    function collectNarrativeCellsByRow(sheet: ParsedSheet, tables: TableCandidate[]): Map<number, ParsedCell[]> {
       const rowMap = new Map<number, ParsedCell[]>();
       for (const cell of sheet.cells) {
         if (!cell.outputValue) continue;
@@ -381,113 +473,189 @@
         entries.push(cell);
         rowMap.set(cell.row, entries);
       }
+      return rowMap;
+    }
+
+    function createNarrativeItem(rowNumber: number, segment: NarrativeRowSegment): NarrativeItem {
+      const text = segment.values.join(" ").trim();
+      return {
+        row: rowNumber,
+        startCol: segment.startCol,
+        text,
+        cellValues: segment.values
+      };
+    }
+
+    function createNarrativeItemsForRow(
+      rowNumber: number,
+      cells: ParsedCell[],
+      options: MarkdownOptions,
+      workbook: ParsedWorkbook | null = null,
+      sheet: ParsedSheet | null = null
+    ): NarrativeItem[] {
+      return splitNarrativeRowSegments(cells, options, workbook, sheet)
+        .map((segment) => createNarrativeItem(rowNumber, segment))
+        .filter((item) => !!item.text);
+    }
+
+    function buildNarrativeItems(
+      workbook: ParsedWorkbook,
+      sheet: ParsedSheet,
+      tables: TableCandidate[],
+      options: MarkdownOptions = {}
+    ): NarrativeItem[] {
+      const rowMap = collectNarrativeCellsByRow(sheet, tables);
       const rowNumbers = Array.from(rowMap.keys()).sort((a, b) => a - b);
+      const items: NarrativeItem[] = [];
+      for (const rowNumber of rowNumbers) {
+        const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
+        items.push(...createNarrativeItemsForRow(rowNumber, cells, options, workbook, sheet));
+      }
+      return items;
+    }
+
+    function shouldStartNarrativeBlock(
+      current: NarrativeBlock | null,
+      rowNumber: number,
+      previousRow: number,
+      startCol: number
+    ): boolean {
+      return !current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3;
+    }
+
+    function createNarrativeBlockFromItem(item: NarrativeItem): NarrativeBlock {
+      return {
+        startRow: item.row,
+        startCol: item.startCol,
+        endRow: item.row,
+        lines: [item.text],
+        items: [item]
+      };
+    }
+
+    function appendNarrativeItem(block: NarrativeBlock, item: NarrativeItem): void {
+      block.lines.push(item.text);
+      block.endRow = item.row;
+      block.items.push(item);
+    }
+
+    function extractNarrativeBlocks(
+      workbook: ParsedWorkbook,
+      sheet: ParsedSheet,
+      tables: TableCandidate[],
+      options: MarkdownOptions = {}
+    ): NarrativeBlock[] {
+      const items = buildNarrativeItems(workbook, sheet, tables, options);
       const blocks: NarrativeBlock[] = [];
       let current: NarrativeBlock | null = null;
       let previousRow = -100;
 
-      for (const rowNumber of rowNumbers) {
-        const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
-        const rowSegments = splitNarrativeRowSegments(cells, options, workbook, sheet);
-        for (const segment of rowSegments) {
-          const rowText = segment.values.join(" ").trim();
-          if (!rowText) continue;
-          const startCol = segment.startCol;
-          if (!current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3) {
-            current = {
-              startRow: rowNumber,
-              startCol,
-              endRow: rowNumber,
-              lines: [rowText],
-              items: [{
-                row: rowNumber,
-                startCol,
-                text: rowText,
-                cellValues: segment.values
-              }]
-            };
-            blocks.push(current);
-          } else {
-            current.lines.push(rowText);
-            current.endRow = rowNumber;
-            current.items.push({
-              row: rowNumber,
-              startCol,
-              text: rowText,
-              cellValues: segment.values
-            });
-          }
-          previousRow = rowNumber;
+      for (const item of items) {
+        if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
+          current = createNarrativeBlockFromItem(item);
+          blocks.push(current);
+        } else {
+          appendNarrativeItem(current, item);
         }
+        previousRow = item.row;
       }
 
       return blocks;
     }
 
-    function extractSectionBlocks(sheet: ParsedSheet, tables: TableCandidate[], narrativeBlocks: NarrativeBlock[]): SectionBlock[] {
+    function createNarrativeSectionAnchors(narrativeBlocks: NarrativeBlock[]): SectionAnchor[] {
+      return narrativeBlocks.map((block) => ({
+        startRow: block.startRow,
+        startCol: block.startCol,
+        endRow: block.endRow,
+        endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
+      }));
+    }
+
+    function createTableSectionAnchors(tables: TableCandidate[]): SectionAnchor[] {
+      return tables.map((table) => ({
+        startRow: table.startRow,
+        startCol: table.startCol,
+        endRow: table.endRow,
+        endCol: table.endCol
+      }));
+    }
+
+    function createPointSectionAnchor(address: string): SectionAnchor | null {
+      const anchor = deps.parseCellAddress(address);
+      if (anchor.row > 0 && anchor.col > 0) {
+        return { startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col };
+      }
+      return null;
+    }
+
+    function createImageSectionAnchors(sheet: ParsedSheet): SectionAnchor[] {
+      return sheet.images
+        .map((image) => createPointSectionAnchor(image.anchor))
+        .filter((anchor): anchor is SectionAnchor => !!anchor);
+    }
+
+    function createChartSectionAnchors(charts: ParsedChartAsset[]): SectionAnchor[] {
+      return charts
+        .map((chart) => createPointSectionAnchor(chart.anchor))
+        .filter((anchor): anchor is SectionAnchor => !!anchor);
+    }
+
+    function createSectionAnchors(sheet: ParsedSheet, tables: TableCandidate[], narrativeBlocks: NarrativeBlock[]): SectionAnchor[] {
       const charts = sheet.charts || [];
-      const anchors: Array<{ startRow: number; startCol: number; endRow: number; endCol: number }> = [];
+      return [
+        ...createNarrativeSectionAnchors(narrativeBlocks),
+        ...createTableSectionAnchors(tables),
+        ...createImageSectionAnchors(sheet),
+        ...createChartSectionAnchors(charts)
+      ];
+    }
 
-      for (const block of narrativeBlocks) {
-        anchors.push({
-          startRow: block.startRow,
-          startCol: block.startCol,
-          endRow: block.endRow,
-          endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
-        });
-      }
-
-      for (const table of tables) {
-        anchors.push({
-          startRow: table.startRow,
-          startCol: table.startCol,
-          endRow: table.endRow,
-          endCol: table.endCol
-        });
-      }
-
-      for (const image of sheet.images) {
-        const anchor = deps.parseCellAddress(image.anchor);
-        if (anchor.row > 0 && anchor.col > 0) {
-          anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-        }
-      }
-
-      for (const chart of charts) {
-        const anchor = deps.parseCellAddress(chart.anchor);
-        if (anchor.row > 0 && anchor.col > 0) {
-          anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-        }
-      }
-
-      if (anchors.length === 0) {
-        return [];
-      }
-      anchors.sort((left, right) => {
+    function sortSectionAnchors(anchors: SectionAnchor[]): SectionAnchor[] {
+      return anchors.sort((left, right) => {
         if (left.startRow !== right.startRow) return left.startRow - right.startRow;
         return left.startCol - right.startCol;
       });
+    }
+
+    function createSectionBlockFromAnchor(anchor: SectionAnchor): SectionBlock {
+      return {
+        startRow: anchor.startRow,
+        startCol: anchor.startCol,
+        endRow: anchor.endRow,
+        endCol: anchor.endCol
+      };
+    }
+
+    function shouldStartNewSectionBlock(current: SectionBlock | null, anchor: SectionAnchor, previousEndRow: number): boolean {
+      const verticalGapThreshold = 4;
+      const gap = anchor.startRow - previousEndRow;
+      return !current || gap > verticalGapThreshold;
+    }
+
+    function extendSectionBlock(section: SectionBlock, anchor: SectionAnchor): void {
+      section.startRow = Math.min(section.startRow, anchor.startRow);
+      section.startCol = Math.min(section.startCol, anchor.startCol);
+      section.endRow = Math.max(section.endRow, anchor.endRow);
+      section.endCol = Math.max(section.endCol, anchor.endCol);
+    }
+
+    function extractSectionBlocks(sheet: ParsedSheet, tables: TableCandidate[], narrativeBlocks: NarrativeBlock[]): SectionBlock[] {
+      const anchors = sortSectionAnchors(createSectionAnchors(sheet, tables, narrativeBlocks));
+      if (anchors.length === 0) {
+        return [];
+      }
 
       const sections: SectionBlock[] = [];
       let current: SectionBlock | null = null;
       let previousEndRow = -100;
-      const verticalGapThreshold = 4;
 
       for (const anchor of anchors) {
-        const gap = anchor.startRow - previousEndRow;
-        if (!current || gap > verticalGapThreshold) {
-          current = {
-            startRow: anchor.startRow,
-            startCol: anchor.startCol,
-            endRow: anchor.endRow,
-            endCol: anchor.endCol
-          };
+        if (shouldStartNewSectionBlock(current, anchor, previousEndRow)) {
+          current = createSectionBlockFromAnchor(anchor);
           sections.push(current);
         } else {
-          current.startRow = Math.min(current.startRow, anchor.startRow);
-          current.startCol = Math.min(current.startCol, anchor.startCol);
-          current.endRow = Math.max(current.endRow, anchor.endRow);
-          current.endCol = Math.max(current.endCol, anchor.endCol);
+          extendSectionBlock(current, anchor);
         }
         previousEndRow = Math.max(previousEndRow, anchor.endRow);
       }
@@ -495,21 +663,125 @@
       return sections;
     }
 
-    function convertSheetToMarkdown(workbook: ParsedWorkbook, sheet: ParsedSheet, options: MarkdownOptions = {}): MarkdownFile {
-      const charts = sheet.charts || [];
-      const shapes = sheet.shapes || [];
-      const shapeBlocks = deps.extractShapeBlocks(shapes, {
-        defaultCellWidthEmu: deps.defaultCellWidthEmu,
-        defaultCellHeightEmu: deps.defaultCellHeightEmu,
-        shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
-        shapeBlockGapYEmu: deps.shapeBlockGapYEmu
-      });
-      const treatFirstRowAsHeader = options.treatFirstRowAsHeader !== false;
-      const tableDetectionMode = options.tableDetectionMode || "balanced";
-      const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
-      const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, options);
-      const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
-      const formulaDiagnostics = sheet.cells
+    function createDefaultShapeSvgFilename(shapeIndex: number): string {
+      return `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`;
+    }
+
+    function createImageSectionEntry(image: ParsedImageAsset, index: number): string {
+      return [
+        `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
+        `- File: ${image.path}`,
+        "",
+        `![${image.filename}](${image.path})`
+      ].join("\n");
+    }
+
+    function createChartSeriesLines(chart: ParsedChartAsset): string[] {
+      if (chart.series.length === 0) {
+        return [];
+      }
+      const lines = ["- Series:"];
+      for (const series of chart.series) {
+        lines.push(`  - ${series.name}`);
+        if (series.axis === "secondary") lines.push("    - Axis: secondary");
+        if (series.categoriesRef) lines.push(`    - categories: ${series.categoriesRef}`);
+        if (series.valuesRef) lines.push(`    - values: ${series.valuesRef}`);
+      }
+      return lines;
+    }
+
+    function createChartSectionEntry(chart: ParsedChartAsset, index: number): string {
+      return [
+        `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
+        `- Title: ${chart.title || "(none)"}`,
+        `- Type: ${chart.chartType}`,
+        ...createChartSeriesLines(chart)
+      ].join("\n");
+    }
+
+    function renderShapeDetails(shape: ParsedShapeAsset, shapeIndex: number): string {
+      const lines = [
+        `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
+        ...deps.renderHierarchicalRawEntries(shape.rawEntries)
+      ];
+      if (shape.svgPath) {
+        lines.push(`- SVG: ${shape.svgPath}`);
+        lines.push("");
+        lines.push(`![${shape.svgFilename || createDefaultShapeSvgFilename(shapeIndex)}](${shape.svgPath})`);
+      }
+      return lines.join("\n");
+    }
+
+    function createShapeBlockSummaryLine(shapeIndexes: number[]): string {
+      return shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ");
+    }
+
+    function createShapeBlockEntry(
+      block: ShapeBlock,
+      blockIndex: number,
+      shapes: ParsedShapeAsset[]
+    ): string {
+      const shapeDetails = block.shapeIndexes
+        .map((shapeIndex) => {
+          const shape = shapes[shapeIndex];
+          if (!shape) return "";
+          return renderShapeDetails(shape, shapeIndex);
+        })
+        .filter(Boolean)
+        .join("\n\n");
+      return [
+        `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
+        `- Shapes: ${createShapeBlockSummaryLine(block.shapeIndexes)}`,
+        `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
+        ...(shapeDetails ? ["", shapeDetails] : [])
+      ].join("\n");
+    }
+
+    function collectUngroupedShapes(shapes: ParsedShapeAsset[], shapeBlocks: ShapeBlock[]): Array<{ shape: ParsedShapeAsset; index: number }> {
+      const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
+      return shapes
+        .map((shape, index) => ({ shape, index }))
+        .filter(({ index }) => !grouped.has(index));
+    }
+
+    function renderImageSection(sheet: ParsedSheet): string {
+      return sheet.images.length > 0
+        ? [
+          "",
+          ...sheet.images.map((image, index) => createImageSectionEntry(image, index))
+        ].join("\n\n")
+        : "";
+    }
+
+    function renderChartSection(charts: ParsedChartAsset[]): string {
+      return charts.length > 0
+        ? [
+          "",
+          ...charts.map((chart, index) => createChartSectionEntry(chart, index))
+        ].join("\n\n")
+        : "";
+    }
+
+    function renderShapeSection(shapes: ParsedShapeAsset[], shapeBlocks: ShapeBlock[], includeShapeDetails: boolean): string {
+      const ungrouped = collectUngroupedShapes(shapes, shapeBlocks);
+      return includeShapeDetails && shapes.length > 0
+        ? [
+          "",
+          ...shapeBlocks.map((block, blockIndex) => createShapeBlockEntry(block, blockIndex, shapes)),
+          ...(ungrouped.length === 0
+            ? []
+            : [
+              "",
+              "### Ungrouped Shapes",
+              "",
+              ...ungrouped.map(({ shape, index }) => renderShapeDetails(shape, index))
+            ])
+        ].join("\n\n")
+        : "";
+    }
+
+    function createFormulaDiagnostics(sheet: ParsedSheet): MarkdownFile["summary"]["formulaDiagnostics"] {
+      return sheet.cells
         .filter((cell) => !!cell.formulaText && cell.resolutionStatus !== null)
         .map((cell) => ({
           address: cell.address,
@@ -518,31 +790,26 @@
           source: cell.resolutionSource,
           outputValue: cell.outputValue
         }));
-      const sections: Array<{
-        sortRow: number;
-        sortCol: number;
-        markdown: string;
-        kind: "narrative" | "table";
-        narrativeBlock?: NarrativeBlock;
-      }> = [];
+    }
 
-      for (const block of narrativeBlocks) {
-        sections.push({
-          sortRow: block.startRow,
-          sortCol: block.startCol,
-          markdown: `${deps.renderNarrativeBlock(block)}\n`,
-          kind: "narrative",
-          narrativeBlock: block
-        });
-      }
+    function createNarrativeSections(narrativeBlocks: NarrativeBlock[]): ContentSection[] {
+      return narrativeBlocks.map((block) => ({
+        sortRow: block.startRow,
+        sortCol: block.startCol,
+        markdown: `${deps.renderNarrativeBlock(block)}\n`,
+        kind: "narrative",
+        narrativeBlock: block
+      }));
+    }
 
-      const fileName = deps.createOutputFileName(
-        workbook.name,
-        sheet.index,
-        sheet.name,
-        options.outputMode || "display",
-        options.formattingMode || "plain"
-      );
+    function createTableSections(
+      workbook: ParsedWorkbook,
+      sheet: ParsedSheet,
+      tables: TableCandidate[],
+      options: MarkdownOptions,
+      treatFirstRowAsHeader: boolean
+    ): ContentSection[] {
+      const sections: ContentSection[] = [];
       let tableCounter = 1;
       for (const table of tables) {
         const rows = deps.matrixFromCandidate(
@@ -562,154 +829,148 @@
         });
         tableCounter += 1;
       }
+      return sections;
+    }
 
-      sections.sort((left, right) => {
+    function sortContentSections(sections: ContentSection[]): ContentSection[] {
+      return sections.sort((left, right) => {
         if (left.sortRow !== right.sortRow) return left.sortRow - right.sortRow;
         return left.sortCol - right.sortCol;
       });
-      const groupedSections = (sectionBlocks.length > 0 ? sectionBlocks : [{
+    }
+
+    function createFallbackSectionBlock(): SectionBlock {
+      return {
         startRow: -1,
         startCol: -1,
         endRow: Number.MAX_SAFE_INTEGER,
         endCol: Number.MAX_SAFE_INTEGER
-      }]).map((block) => ({
-        block,
-        entries: sections.filter((section) =>
-          section.sortRow >= block.startRow
-          && section.sortRow <= block.endRow
-          && section.sortCol >= block.startCol
-          && section.sortCol <= block.endCol
-        )
-      })).filter((group) => group.entries.length > 0);
+      };
+    }
 
-      const body = groupedSections
-        .map((group) => group.entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim())
+    function isSectionInsideBlock(section: ContentSection, block: SectionBlock): boolean {
+      return section.sortRow >= block.startRow
+        && section.sortRow <= block.endRow
+        && section.sortCol >= block.startCol
+        && section.sortCol <= block.endCol;
+    }
+
+    function createGroupedSections(sectionBlocks: SectionBlock[], sections: ContentSection[]): GroupedSection[] {
+      const blocks: SectionBlock[] = sectionBlocks.length > 0
+        ? sectionBlocks
+        : [createFallbackSectionBlock()];
+      return blocks.map((block) => ({
+        block,
+        entries: sections.filter((section) => isSectionInsideBlock(section, block))
+      })).filter((group) => group.entries.length > 0);
+    }
+
+    function renderGroupedSectionEntries(entries: ContentSection[]): string {
+      return entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+    }
+
+    function renderGroupedSectionBody(groupedSections: GroupedSection[]): string {
+      return groupedSections
+        .map((group) => renderGroupedSectionEntries(group.entries))
         .filter(Boolean)
         .join("\n\n---\n\n")
         .trim();
-      const imageSection = sheet.images.length > 0
-        ? [
-          "",
-          ...sheet.images.map((image, index) => [
-            `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
-            `- File: ${image.path}`,
-            "",
-            `![${image.filename}](${image.path})`
-          ].join("\n"))
-        ].join("\n\n")
-        : "";
-      const chartSection = charts.length > 0
-        ? [
-          "",
-          ...charts.map((chart, index) => {
-            const lines = [
-              `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
-              `- Title: ${chart.title || "(none)"}`,
-              `- Type: ${chart.chartType}`
-            ];
-            if (chart.series.length > 0) {
-              lines.push("- Series:");
-              for (const series of chart.series) {
-                lines.push(`  - ${series.name}`);
-                if (series.axis === "secondary") lines.push("    - Axis: secondary");
-                if (series.categoriesRef) lines.push(`    - categories: ${series.categoriesRef}`);
-                if (series.valuesRef) lines.push(`    - values: ${series.valuesRef}`);
-              }
-            }
-            return lines.join("\n");
-          })
-        ].join("\n\n")
-        : "";
-      const includeShapeDetails = options.includeShapeDetails !== false;
-      const shapeSection = includeShapeDetails && shapes.length > 0
-        ? [
-          "",
-          ...shapeBlocks.map((block, blockIndex) => {
-            const shapeDetails = block.shapeIndexes
-              .map((shapeIndex) => {
-                const shape = shapes[shapeIndex];
-                if (!shape) return "";
-                const lines = [
-                  `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
-                  ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                ];
-                if (shape.svgPath) {
-                  lines.push(`- SVG: ${shape.svgPath}`);
-                  lines.push("");
-                  lines.push(`![${shape.svgFilename || `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                }
-                return lines.join("\n");
-              })
-              .filter(Boolean)
-              .join("\n\n");
-            return [
-              `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
-              `- Shapes: ${block.shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ")}`,
-              `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
-              ...(shapeDetails ? ["", shapeDetails] : [])
-            ].join("\n");
-          }),
-          ...(() => {
-            const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
-            const ungrouped = shapes
-              .map((shape, index) => ({ shape, index }))
-              .filter(({ index }) => !grouped.has(index));
-            if (ungrouped.length === 0) {
-              return [];
-            }
-            return [
-              "",
-              "### Ungrouped Shapes",
-              "",
-              ...ungrouped.map(({ shape, index }) => {
-                const lines = [
-                  `#### Shape: ${String(index + 1).padStart(3, "0")} (${shape.anchor})`,
-                  ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                ];
-                if (shape.svgPath) {
-                  lines.push(`- SVG: ${shape.svgPath}`);
-                  lines.push("");
-                  lines.push(`![${shape.svgFilename || `shape_${String(index + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                }
-                return lines.join("\n");
-              })
-            ];
-          })()
-        ].join("\n\n")
-        : "";
+    }
+
+    function collectSheetRenderState(workbook: ParsedWorkbook, sheet: ParsedSheet, options: MarkdownOptions = {}): SheetRenderState {
+      const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+      const charts = sheet.charts || [];
+      const shapes = sheet.shapes || [];
+      const shapeBlocks = deps.extractShapeBlocks(shapes, {
+        defaultCellWidthEmu: deps.defaultCellWidthEmu,
+        defaultCellHeightEmu: deps.defaultCellHeightEmu,
+        shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
+        shapeBlockGapYEmu: deps.shapeBlockGapYEmu
+      });
+      const treatFirstRowAsHeader = resolvedOptions.treatFirstRowAsHeader;
+      const tableDetectionMode = resolvedOptions.tableDetectionMode;
+      const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
+      const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, resolvedOptions);
+      const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
+      const formulaDiagnostics = createFormulaDiagnostics(sheet);
+      const sections = [
+        ...createNarrativeSections(narrativeBlocks),
+        ...createTableSections(workbook, sheet, tables, resolvedOptions, treatFirstRowAsHeader)
+      ];
+      sortContentSections(sections);
+      const groupedSections = createGroupedSections(sectionBlocks, sections);
+      const body = renderGroupedSectionBody(groupedSections);
+      const imageSection = renderImageSection(sheet);
+      const chartSection = renderChartSection(charts);
+      const includeShapeDetails = resolvedOptions.includeShapeDetails;
+      const shapeSection = renderShapeSection(shapes, shapeBlocks, includeShapeDetails);
+      return {
+        resolvedOptions,
+        charts,
+        shapes,
+        shapeBlocks,
+        tables,
+        narrativeBlocks,
+        sectionBlocks,
+        formulaDiagnostics,
+        sections,
+        groupedSections,
+        body,
+        imageSection,
+        chartSection,
+        shapeSection
+      };
+    }
+
+    function createSheetMarkdownText(workbook: ParsedWorkbook, sheet: ParsedSheet, state: SheetRenderState): string {
       const markdown = [
         `# Book: ${workbook.name}`,
         "",
         `## Sheet: ${sheet.name}`,
         "",
-        body || "_No extractable body content was found._",
-        chartSection,
-        shapeSection,
-        imageSection
+        state.body || "_No extractable body content was found._",
+        state.chartSection,
+        state.shapeSection,
+        state.imageSection
       ].join("\n");
+      return markdown;
+    }
 
+    function createSheetSummary(sheet: ParsedSheet, state: SheetRenderState): MarkdownFile["summary"] {
+      return {
+        outputMode: state.resolvedOptions.outputMode,
+        formattingMode: state.resolvedOptions.formattingMode,
+        tableDetectionMode: state.resolvedOptions.tableDetectionMode,
+        sections: state.sectionBlocks.length,
+        tables: state.tables.length,
+        narrativeBlocks: state.narrativeBlocks.length,
+        merges: sheet.merges.length,
+        images: sheet.images.length,
+        charts: state.charts.length,
+        cells: sheet.cells.length,
+        tableScores: state.tables.map((table) => ({
+          range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
+          score: table.score,
+          reasons: [...table.reasonSummary]
+        })),
+        formulaDiagnostics: state.formulaDiagnostics
+      };
+    }
+
+    function convertSheetToMarkdown(workbook: ParsedWorkbook, sheet: ParsedSheet, options: MarkdownOptions = {}): MarkdownFile {
+      const state = collectSheetRenderState(workbook, sheet, options);
+      const fileName = deps.createOutputFileName(
+        workbook.name,
+        sheet.index,
+        sheet.name,
+        state.resolvedOptions.outputMode,
+        state.resolvedOptions.formattingMode
+      );
       return {
         fileName,
         sheetName: sheet.name,
-        markdown,
-        summary: {
-          outputMode: options.outputMode || "display",
-          formattingMode: options.formattingMode || "plain",
-          tableDetectionMode,
-          sections: sectionBlocks.length,
-          tables: tables.length,
-          narrativeBlocks: narrativeBlocks.length,
-          merges: sheet.merges.length,
-          images: sheet.images.length,
-          charts: charts.length,
-          cells: sheet.cells.length,
-          tableScores: tables.map((table) => ({
-            range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
-            score: table.score,
-            reasons: [...table.reasonSummary]
-          })),
-          formulaDiagnostics
-        }
+        markdown: createSheetMarkdownText(workbook, sheet, state),
+        summary: createSheetSummary(sheet, state)
       };
     }
 
@@ -722,8 +983,19 @@
       formatCellForMarkdown,
       isCellInAnyTable,
       splitNarrativeRowSegments,
+      collectNarrativeCellsByRow,
+      buildNarrativeItems,
       extractNarrativeBlocks,
       extractSectionBlocks,
+      sortContentSections,
+      createGroupedSections,
+      renderGroupedSectionBody,
+      collectSheetRenderState,
+      createSheetMarkdownText,
+      createSheetSummary,
+      renderImageSection,
+      renderChartSection,
+      renderShapeSection,
       convertSheetToMarkdown,
       convertWorkbookToMarkdownFiles
     };

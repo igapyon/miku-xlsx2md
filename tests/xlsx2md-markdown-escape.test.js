@@ -1,25 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const markdownEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-escape.js"),
-  "utf8"
-);
-
 function bootMarkdownEscape() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(markdownEscapeCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("markdownEscape");
+  return bootRegisteredModule(__dirname, [
+    "src/js/markdown-normalize.js",
+    "src/js/markdown-escape.js"
+  ], "markdownEscape");
 }
 
 describe("xlsx2md markdown escape", () => {
@@ -41,6 +35,8 @@ describe("xlsx2md markdown escape", () => {
   it("escapes line-start markdown markers line by line", () => {
     const api = bootMarkdownEscape();
 
+    expect(api.escapeMarkdownLineStart("# h\n- item\r\n1. num\r> quote"))
+      .toBe("\\# h\n\\- item\n1\\. num\n\\> quote");
     expect(api.escapeMarkdownLiteralText("# h\n- item\n1. num\n> quote"))
       .toBe("\\# h\n\\- item\n1\\. num\n&gt; quote");
   });

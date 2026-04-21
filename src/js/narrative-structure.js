@@ -5,31 +5,43 @@
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
+    function normalizeNarrativeText(text) {
+        return markdownNormalizeHelper.normalizeMarkdownText(text);
+    }
+    function formatNarrativeHeading(text) {
+        return `### ${markdownNormalizeHelper.normalizeMarkdownHeadingText(text)}`;
+    }
+    function formatNarrativeBullet(text) {
+        return `- ${markdownNormalizeHelper.normalizeMarkdownListItemText(text)}`;
+    }
+    function isIndentedChildItem(parent, child) {
+        return !!(parent && child && child.startCol > parent.startCol);
+    }
     function renderNarrativeBlock(block) {
         if (!block.items || block.items.length === 0) {
-            return block.lines.map((line) => markdownNormalizeHelper.normalizeMarkdownText(line)).join("\n");
+            return block.lines.map((line) => normalizeNarrativeText(line)).join("\n");
         }
         const parts = [];
         let index = 0;
         while (index < block.items.length) {
             const current = block.items[index];
             const next = block.items[index + 1];
-            if (current && next && next.startCol > current.startCol) {
+            if (isIndentedChildItem(current, next)) {
                 let childEnd = index + 1;
-                while (childEnd < block.items.length && block.items[childEnd].startCol > current.startCol) {
+                while (childEnd < block.items.length && isIndentedChildItem(current, block.items[childEnd])) {
                     childEnd += 1;
                 }
                 const childLines = block.items
                     .slice(index + 1, childEnd)
-                    .map((item) => `- ${markdownNormalizeHelper.normalizeMarkdownListItemText(item.text)}`);
-                parts.push(`### ${markdownNormalizeHelper.normalizeMarkdownHeadingText(current.text)}`);
+                    .map((item) => formatNarrativeBullet(item.text));
+                parts.push(formatNarrativeHeading(current.text));
                 if (childLines.length > 0) {
                     parts.push(childLines.join("\n"));
                 }
                 index = childEnd;
                 continue;
             }
-            parts.push(markdownNormalizeHelper.normalizeMarkdownText(current.text));
+            parts.push(normalizeNarrativeText(current.text));
             index += 1;
         }
         return parts.join("\n\n");
@@ -38,7 +50,7 @@
         if (!block || !block.items || block.items.length < 2) {
             return false;
         }
-        return block.items[1].startCol > block.items[0].startCol;
+        return isIndentedChildItem(block.items[0], block.items[1]);
     }
     const narrativeStructureApi = {
         renderNarrativeBlock,

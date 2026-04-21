@@ -1,25 +1,16 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const formulaEngineCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-engine.js"),
-  "utf8"
-);
-
 function bootFormulaEngine() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(formulaEngineCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("formulaEngine");
+  return bootRegisteredModule(__dirname, ["src/js/formula-engine.js"], "formulaEngine");
 }
 
 describe("xlsx2md formula engine", () => {

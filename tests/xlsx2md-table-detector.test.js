@@ -1,30 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const borderGridCode = readFileSync(
-  path.resolve(__dirname, "../src/js/border-grid.js"),
-  "utf8"
-);
-const tableDetectorCode = readFileSync(
-  path.resolve(__dirname, "../src/js/table-detector.js"),
-  "utf8"
-);
-
 function bootTableDetector() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(borderGridCode)();
-  new Function(tableDetectorCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("tableDetector");
+  return bootRegisteredModule(__dirname, [
+    "src/js/border-grid.js",
+    "src/js/table-detector.js"
+  ], "tableDetector");
 }
 
 function createCell(row, col, outputValue, borders = {}) {

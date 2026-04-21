@@ -1,6 +1,6 @@
-# Contributing to xlsx2md
+# Contributing to miku-xlsx2md
 
-Thank you for contributing to `xlsx2md`.
+Thank you for contributing to `miku-xlsx2md`.
 
 This project accepts bug reports, feature requests, documentation fixes, tests, and pull requests.
 
@@ -54,9 +54,9 @@ Contributors may be acknowledged in project history, release notes, or other pro
 
 ---
 
-# xlsx2md へのコントリビュート
+# miku-xlsx2md へのコントリビュート
 
-`xlsx2md` へのコントリビュートありがとうございます。
+`miku-xlsx2md` へのコントリビュートありがとうございます。
 
 このプロジェクトでは、バグ報告、機能提案、ドキュメント修正、テスト追加、Pull Request を受け付けます。
 

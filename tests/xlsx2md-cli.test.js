@@ -173,6 +173,30 @@ describe("xlsx2md cli", () => {
     }
   });
 
+  it("keeps border-priority as a compatibility alias", async () => {
+    const workspace = mkdtempSync(path.join(tmpdir(), "xlsx2md-cli-"));
+    const fixturePath = path.resolve(__dirname, "./fixtures/table/table-border-priority-sample01.xlsx");
+    const outputPath = path.join(workspace, "border-priority.md");
+
+    try {
+      await execFileAsync(process.execPath, [
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
+        fixturePath,
+        "--out",
+        outputPath,
+        "--table-detection-mode",
+        "border-priority"
+      ], {
+        cwd: path.resolve(__dirname, "..")
+      });
+
+      const outputText = readFileSync(outputPath, "utf8");
+      expect(outputText).toContain("# ");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
   it("writes UTF-16BE markdown with BOM when requested", async () => {
     const workspace = mkdtempSync(path.join(tmpdir(), "xlsx2md-cli-"));
     const fixturePath = path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx");
@@ -323,6 +347,18 @@ describe("xlsx2md cli", () => {
       cwd: path.resolve(__dirname, "..")
     })).rejects.toMatchObject({
       stderr: expect.stringContaining("Invalid BOM mode: invalid")
+    });
+  });
+
+  it("fails when a value option is missing its value", async () => {
+    await expect(execFileAsync(process.execPath, [
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
+      "--encoding"
+    ], {
+      cwd: path.resolve(__dirname, "..")
+    })).rejects.toMatchObject({
+      stderr: expect.stringContaining("Missing value for --encoding")
     });
   });
 

@@ -5,6 +5,7 @@
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     function createSheetMarkdownApi(deps) {
+        const markdownOptions = requireXlsx2mdMarkdownOptions();
         const richTextRenderer = requireXlsx2mdRichTextRendererModule().createRichTextRendererApi({
             normalizeMarkdownText: deps.normalizeMarkdownText
         });
@@ -61,41 +62,70 @@
                 ? `[${label}](${href}) (${traceText})`
                 : `[${label}](${href})`;
         }
-        function formatCellForMarkdown(cell, options, workbook = null, sheet = null) {
+        function createDisplayCellForFormatting(cell, formattingMode) {
             var _a;
+            if (formattingMode !== "github" || !cell.hyperlink) {
+                return cell;
+            }
+            return {
+                ...cell,
+                textStyle: {
+                    ...cell.textStyle,
+                    underline: false
+                },
+                richTextRuns: ((_a = cell.richTextRuns) === null || _a === void 0 ? void 0 : _a.map((run) => ({
+                    ...run,
+                    underline: false
+                }))) || null
+            };
+        }
+        function createCellMarkdownValues(cell, formattingMode) {
+            const displayCell = createDisplayCellForFormatting(cell, formattingMode);
+            return {
+                displayValue: richTextRenderer.compactText(String(cell.outputValue || "")),
+                rawValue: richTextRenderer.compactText(String(cell.rawValue || "")),
+                displayMarkdown: richTextRenderer.renderCellDisplayText(displayCell, formattingMode)
+            };
+        }
+        function renderCellWithHyperlink(cell, text, context) {
+            return renderHyperlinkMarkdown(cell, text, context.workbook, context.sheet, context.options);
+        }
+        function renderDisplayModeCell(cell, values, context) {
+            return renderCellWithHyperlink(cell, values.displayMarkdown, context);
+        }
+        function renderRawModeCell(cell, values, context) {
+            return renderCellWithHyperlink(cell, values.rawValue || values.displayValue, context);
+        }
+        function renderBothModeCell(cell, values, context) {
+            if (values.rawValue && values.rawValue !== values.displayValue) {
+                if (values.displayMarkdown) {
+                    return `${renderCellWithHyperlink(cell, values.displayMarkdown, context)} [raw=${values.rawValue}]`;
+                }
+                return `[raw=${values.rawValue}]`;
+            }
+            return renderCellWithHyperlink(cell, values.displayMarkdown || values.rawValue, context);
+        }
+        function getCellMarkdownRenderer(outputMode) {
+            if (outputMode === "raw") {
+                return renderRawModeCell;
+            }
+            if (outputMode === "both") {
+                return renderBothModeCell;
+            }
+            return renderDisplayModeCell;
+        }
+        function formatCellForMarkdown(cell, options, workbook = null, sheet = null) {
             if (!cell)
                 return "";
-            const mode = options.outputMode || "display";
-            const formattingMode = options.formattingMode || "plain";
-            const displayCell = formattingMode === "github" && cell.hyperlink
-                ? {
-                    ...cell,
-                    textStyle: {
-                        ...cell.textStyle,
-                        underline: false
-                    },
-                    richTextRuns: ((_a = cell.richTextRuns) === null || _a === void 0 ? void 0 : _a.map((run) => ({
-                        ...run,
-                        underline: false
-                    }))) || null
-                }
-                : cell;
-            const displayValue = richTextRenderer.compactText(String(cell.outputValue || ""));
-            const rawValue = richTextRenderer.compactText(String(cell.rawValue || ""));
-            const displayMarkdown = richTextRenderer.renderCellDisplayText(displayCell, formattingMode);
-            if (mode === "raw") {
-                return renderHyperlinkMarkdown(cell, rawValue || displayValue, workbook, sheet, options);
-            }
-            if (mode === "both") {
-                if (rawValue && rawValue !== displayValue) {
-                    if (displayMarkdown) {
-                        return `${renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options)} [raw=${rawValue}]`;
-                    }
-                    return `[raw=${rawValue}]`;
-                }
-                return renderHyperlinkMarkdown(cell, displayMarkdown || rawValue, workbook, sheet, options);
-            }
-            return renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options);
+            const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+            const formattingMode = resolvedOptions.formattingMode;
+            const values = createCellMarkdownValues(cell, formattingMode);
+            const renderCell = getCellMarkdownRenderer(resolvedOptions.outputMode);
+            return renderCell(cell, values, {
+                workbook,
+                sheet,
+                options
+            });
         }
         function isCellInAnyTable(row, col, tables) {
             return tables.some((table) => row >= table.startRow && row <= table.endRow && col >= table.startCol && col <= table.endCol);
@@ -125,7 +155,7 @@
                 values: segment.values
             }));
         }
-        function extractNarrativeBlocks(workbook, sheet, tables, options = {}) {
+        function collectNarrativeCellsByRow(sheet, tables) {
             const rowMap = new Map();
             for (const cell of sheet.cells) {
                 if (!cell.outputValue)
@@ -136,128 +166,262 @@
                 entries.push(cell);
                 rowMap.set(cell.row, entries);
             }
+            return rowMap;
+        }
+        function createNarrativeItem(rowNumber, segment) {
+            const text = segment.values.join(" ").trim();
+            return {
+                row: rowNumber,
+                startCol: segment.startCol,
+                text,
+                cellValues: segment.values
+            };
+        }
+        function createNarrativeItemsForRow(rowNumber, cells, options, workbook = null, sheet = null) {
+            return splitNarrativeRowSegments(cells, options, workbook, sheet)
+                .map((segment) => createNarrativeItem(rowNumber, segment))
+                .filter((item) => !!item.text);
+        }
+        function buildNarrativeItems(workbook, sheet, tables, options = {}) {
+            const rowMap = collectNarrativeCellsByRow(sheet, tables);
             const rowNumbers = Array.from(rowMap.keys()).sort((a, b) => a - b);
+            const items = [];
+            for (const rowNumber of rowNumbers) {
+                const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
+                items.push(...createNarrativeItemsForRow(rowNumber, cells, options, workbook, sheet));
+            }
+            return items;
+        }
+        function shouldStartNarrativeBlock(current, rowNumber, previousRow, startCol) {
+            return !current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3;
+        }
+        function createNarrativeBlockFromItem(item) {
+            return {
+                startRow: item.row,
+                startCol: item.startCol,
+                endRow: item.row,
+                lines: [item.text],
+                items: [item]
+            };
+        }
+        function appendNarrativeItem(block, item) {
+            block.lines.push(item.text);
+            block.endRow = item.row;
+            block.items.push(item);
+        }
+        function extractNarrativeBlocks(workbook, sheet, tables, options = {}) {
+            const items = buildNarrativeItems(workbook, sheet, tables, options);
             const blocks = [];
             let current = null;
             let previousRow = -100;
-            for (const rowNumber of rowNumbers) {
-                const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
-                const rowSegments = splitNarrativeRowSegments(cells, options, workbook, sheet);
-                for (const segment of rowSegments) {
-                    const rowText = segment.values.join(" ").trim();
-                    if (!rowText)
-                        continue;
-                    const startCol = segment.startCol;
-                    if (!current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3) {
-                        current = {
-                            startRow: rowNumber,
-                            startCol,
-                            endRow: rowNumber,
-                            lines: [rowText],
-                            items: [{
-                                    row: rowNumber,
-                                    startCol,
-                                    text: rowText,
-                                    cellValues: segment.values
-                                }]
-                        };
-                        blocks.push(current);
-                    }
-                    else {
-                        current.lines.push(rowText);
-                        current.endRow = rowNumber;
-                        current.items.push({
-                            row: rowNumber,
-                            startCol,
-                            text: rowText,
-                            cellValues: segment.values
-                        });
-                    }
-                    previousRow = rowNumber;
+            for (const item of items) {
+                if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
+                    current = createNarrativeBlockFromItem(item);
+                    blocks.push(current);
                 }
+                else {
+                    appendNarrativeItem(current, item);
+                }
+                previousRow = item.row;
             }
             return blocks;
         }
-        function extractSectionBlocks(sheet, tables, narrativeBlocks) {
+        function createNarrativeSectionAnchors(narrativeBlocks) {
+            return narrativeBlocks.map((block) => ({
+                startRow: block.startRow,
+                startCol: block.startCol,
+                endRow: block.endRow,
+                endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
+            }));
+        }
+        function createTableSectionAnchors(tables) {
+            return tables.map((table) => ({
+                startRow: table.startRow,
+                startCol: table.startCol,
+                endRow: table.endRow,
+                endCol: table.endCol
+            }));
+        }
+        function createPointSectionAnchor(address) {
+            const anchor = deps.parseCellAddress(address);
+            if (anchor.row > 0 && anchor.col > 0) {
+                return { startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col };
+            }
+            return null;
+        }
+        function createImageSectionAnchors(sheet) {
+            return sheet.images
+                .map((image) => createPointSectionAnchor(image.anchor))
+                .filter((anchor) => !!anchor);
+        }
+        function createChartSectionAnchors(charts) {
+            return charts
+                .map((chart) => createPointSectionAnchor(chart.anchor))
+                .filter((anchor) => !!anchor);
+        }
+        function createSectionAnchors(sheet, tables, narrativeBlocks) {
             const charts = sheet.charts || [];
-            const anchors = [];
-            for (const block of narrativeBlocks) {
-                anchors.push({
-                    startRow: block.startRow,
-                    startCol: block.startCol,
-                    endRow: block.endRow,
-                    endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
-                });
-            }
-            for (const table of tables) {
-                anchors.push({
-                    startRow: table.startRow,
-                    startCol: table.startCol,
-                    endRow: table.endRow,
-                    endCol: table.endCol
-                });
-            }
-            for (const image of sheet.images) {
-                const anchor = deps.parseCellAddress(image.anchor);
-                if (anchor.row > 0 && anchor.col > 0) {
-                    anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-                }
-            }
-            for (const chart of charts) {
-                const anchor = deps.parseCellAddress(chart.anchor);
-                if (anchor.row > 0 && anchor.col > 0) {
-                    anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-                }
-            }
-            if (anchors.length === 0) {
-                return [];
-            }
-            anchors.sort((left, right) => {
+            return [
+                ...createNarrativeSectionAnchors(narrativeBlocks),
+                ...createTableSectionAnchors(tables),
+                ...createImageSectionAnchors(sheet),
+                ...createChartSectionAnchors(charts)
+            ];
+        }
+        function sortSectionAnchors(anchors) {
+            return anchors.sort((left, right) => {
                 if (left.startRow !== right.startRow)
                     return left.startRow - right.startRow;
                 return left.startCol - right.startCol;
             });
+        }
+        function createSectionBlockFromAnchor(anchor) {
+            return {
+                startRow: anchor.startRow,
+                startCol: anchor.startCol,
+                endRow: anchor.endRow,
+                endCol: anchor.endCol
+            };
+        }
+        function shouldStartNewSectionBlock(current, anchor, previousEndRow) {
+            const verticalGapThreshold = 4;
+            const gap = anchor.startRow - previousEndRow;
+            return !current || gap > verticalGapThreshold;
+        }
+        function extendSectionBlock(section, anchor) {
+            section.startRow = Math.min(section.startRow, anchor.startRow);
+            section.startCol = Math.min(section.startCol, anchor.startCol);
+            section.endRow = Math.max(section.endRow, anchor.endRow);
+            section.endCol = Math.max(section.endCol, anchor.endCol);
+        }
+        function extractSectionBlocks(sheet, tables, narrativeBlocks) {
+            const anchors = sortSectionAnchors(createSectionAnchors(sheet, tables, narrativeBlocks));
+            if (anchors.length === 0) {
+                return [];
+            }
             const sections = [];
             let current = null;
             let previousEndRow = -100;
-            const verticalGapThreshold = 4;
             for (const anchor of anchors) {
-                const gap = anchor.startRow - previousEndRow;
-                if (!current || gap > verticalGapThreshold) {
-                    current = {
-                        startRow: anchor.startRow,
-                        startCol: anchor.startCol,
-                        endRow: anchor.endRow,
-                        endCol: anchor.endCol
-                    };
+                if (shouldStartNewSectionBlock(current, anchor, previousEndRow)) {
+                    current = createSectionBlockFromAnchor(anchor);
                     sections.push(current);
                 }
                 else {
-                    current.startRow = Math.min(current.startRow, anchor.startRow);
-                    current.startCol = Math.min(current.startCol, anchor.startCol);
-                    current.endRow = Math.max(current.endRow, anchor.endRow);
-                    current.endCol = Math.max(current.endCol, anchor.endCol);
+                    extendSectionBlock(current, anchor);
                 }
                 previousEndRow = Math.max(previousEndRow, anchor.endRow);
             }
             return sections;
         }
-        function convertSheetToMarkdown(workbook, sheet, options = {}) {
-            var _a;
-            const charts = sheet.charts || [];
-            const shapes = sheet.shapes || [];
-            const shapeBlocks = deps.extractShapeBlocks(shapes, {
-                defaultCellWidthEmu: deps.defaultCellWidthEmu,
-                defaultCellHeightEmu: deps.defaultCellHeightEmu,
-                shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
-                shapeBlockGapYEmu: deps.shapeBlockGapYEmu
-            });
-            const treatFirstRowAsHeader = options.treatFirstRowAsHeader !== false;
-            const tableDetectionMode = options.tableDetectionMode || "balanced";
-            const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
-            const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, options);
-            const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
-            const formulaDiagnostics = sheet.cells
+        function createDefaultShapeSvgFilename(shapeIndex) {
+            return `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`;
+        }
+        function createImageSectionEntry(image, index) {
+            return [
+                `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
+                `- File: ${image.path}`,
+                "",
+                `![${image.filename}](${image.path})`
+            ].join("\n");
+        }
+        function createChartSeriesLines(chart) {
+            if (chart.series.length === 0) {
+                return [];
+            }
+            const lines = ["- Series:"];
+            for (const series of chart.series) {
+                lines.push(`  - ${series.name}`);
+                if (series.axis === "secondary")
+                    lines.push("    - Axis: secondary");
+                if (series.categoriesRef)
+                    lines.push(`    - categories: ${series.categoriesRef}`);
+                if (series.valuesRef)
+                    lines.push(`    - values: ${series.valuesRef}`);
+            }
+            return lines;
+        }
+        function createChartSectionEntry(chart, index) {
+            return [
+                `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
+                `- Title: ${chart.title || "(none)"}`,
+                `- Type: ${chart.chartType}`,
+                ...createChartSeriesLines(chart)
+            ].join("\n");
+        }
+        function renderShapeDetails(shape, shapeIndex) {
+            const lines = [
+                `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
+                ...deps.renderHierarchicalRawEntries(shape.rawEntries)
+            ];
+            if (shape.svgPath) {
+                lines.push(`- SVG: ${shape.svgPath}`);
+                lines.push("");
+                lines.push(`![${shape.svgFilename || createDefaultShapeSvgFilename(shapeIndex)}](${shape.svgPath})`);
+            }
+            return lines.join("\n");
+        }
+        function createShapeBlockSummaryLine(shapeIndexes) {
+            return shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ");
+        }
+        function createShapeBlockEntry(block, blockIndex, shapes) {
+            const shapeDetails = block.shapeIndexes
+                .map((shapeIndex) => {
+                const shape = shapes[shapeIndex];
+                if (!shape)
+                    return "";
+                return renderShapeDetails(shape, shapeIndex);
+            })
+                .filter(Boolean)
+                .join("\n\n");
+            return [
+                `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
+                `- Shapes: ${createShapeBlockSummaryLine(block.shapeIndexes)}`,
+                `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
+                ...(shapeDetails ? ["", shapeDetails] : [])
+            ].join("\n");
+        }
+        function collectUngroupedShapes(shapes, shapeBlocks) {
+            const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
+            return shapes
+                .map((shape, index) => ({ shape, index }))
+                .filter(({ index }) => !grouped.has(index));
+        }
+        function renderImageSection(sheet) {
+            return sheet.images.length > 0
+                ? [
+                    "",
+                    ...sheet.images.map((image, index) => createImageSectionEntry(image, index))
+                ].join("\n\n")
+                : "";
+        }
+        function renderChartSection(charts) {
+            return charts.length > 0
+                ? [
+                    "",
+                    ...charts.map((chart, index) => createChartSectionEntry(chart, index))
+                ].join("\n\n")
+                : "";
+        }
+        function renderShapeSection(shapes, shapeBlocks, includeShapeDetails) {
+            const ungrouped = collectUngroupedShapes(shapes, shapeBlocks);
+            return includeShapeDetails && shapes.length > 0
+                ? [
+                    "",
+                    ...shapeBlocks.map((block, blockIndex) => createShapeBlockEntry(block, blockIndex, shapes)),
+                    ...(ungrouped.length === 0
+                        ? []
+                        : [
+                            "",
+                            "### Ungrouped Shapes",
+                            "",
+                            ...ungrouped.map(({ shape, index }) => renderShapeDetails(shape, index))
+                        ])
+                ].join("\n\n")
+                : "";
+        }
+        function createFormulaDiagnostics(sheet) {
+            return sheet.cells
                 .filter((cell) => !!cell.formulaText && cell.resolutionStatus !== null)
                 .map((cell) => ({
                 address: cell.address,
@@ -266,17 +430,19 @@
                 source: cell.resolutionSource,
                 outputValue: cell.outputValue
             }));
+        }
+        function createNarrativeSections(narrativeBlocks) {
+            return narrativeBlocks.map((block) => ({
+                sortRow: block.startRow,
+                sortCol: block.startCol,
+                markdown: `${deps.renderNarrativeBlock(block)}\n`,
+                kind: "narrative",
+                narrativeBlock: block
+            }));
+        }
+        function createTableSections(workbook, sheet, tables, options, treatFirstRowAsHeader) {
+            var _a;
             const sections = [];
-            for (const block of narrativeBlocks) {
-                sections.push({
-                    sortRow: block.startRow,
-                    sortCol: block.startCol,
-                    markdown: `${deps.renderNarrativeBlock(block)}\n`,
-                    kind: "narrative",
-                    narrativeBlock: block
-                });
-            }
-            const fileName = deps.createOutputFileName(workbook.name, sheet.index, sheet.name, options.outputMode || "display", options.formattingMode || "plain");
             let tableCounter = 1;
             for (const table of tables) {
                 const rows = deps.matrixFromCandidate(sheet, table, options, buildCellMap, (cell, tableOptions) => formatCellForMarkdown(cell, tableOptions, workbook, sheet));
@@ -291,154 +457,133 @@
                 });
                 tableCounter += 1;
             }
-            sections.sort((left, right) => {
+            return sections;
+        }
+        function sortContentSections(sections) {
+            return sections.sort((left, right) => {
                 if (left.sortRow !== right.sortRow)
                     return left.sortRow - right.sortRow;
                 return left.sortCol - right.sortCol;
             });
-            const groupedSections = (sectionBlocks.length > 0 ? sectionBlocks : [{
-                    startRow: -1,
-                    startCol: -1,
-                    endRow: Number.MAX_SAFE_INTEGER,
-                    endCol: Number.MAX_SAFE_INTEGER
-                }]).map((block) => ({
+        }
+        function createFallbackSectionBlock() {
+            return {
+                startRow: -1,
+                startCol: -1,
+                endRow: Number.MAX_SAFE_INTEGER,
+                endCol: Number.MAX_SAFE_INTEGER
+            };
+        }
+        function isSectionInsideBlock(section, block) {
+            return section.sortRow >= block.startRow
+                && section.sortRow <= block.endRow
+                && section.sortCol >= block.startCol
+                && section.sortCol <= block.endCol;
+        }
+        function createGroupedSections(sectionBlocks, sections) {
+            const blocks = sectionBlocks.length > 0
+                ? sectionBlocks
+                : [createFallbackSectionBlock()];
+            return blocks.map((block) => ({
                 block,
-                entries: sections.filter((section) => section.sortRow >= block.startRow
-                    && section.sortRow <= block.endRow
-                    && section.sortCol >= block.startCol
-                    && section.sortCol <= block.endCol)
+                entries: sections.filter((section) => isSectionInsideBlock(section, block))
             })).filter((group) => group.entries.length > 0);
-            const body = groupedSections
-                .map((group) => group.entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim())
+        }
+        function renderGroupedSectionEntries(entries) {
+            return entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+        }
+        function renderGroupedSectionBody(groupedSections) {
+            return groupedSections
+                .map((group) => renderGroupedSectionEntries(group.entries))
                 .filter(Boolean)
                 .join("\n\n---\n\n")
                 .trim();
-            const imageSection = sheet.images.length > 0
-                ? [
-                    "",
-                    ...sheet.images.map((image, index) => [
-                        `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
-                        `- File: ${image.path}`,
-                        "",
-                        `![${image.filename}](${image.path})`
-                    ].join("\n"))
-                ].join("\n\n")
-                : "";
-            const chartSection = charts.length > 0
-                ? [
-                    "",
-                    ...charts.map((chart, index) => {
-                        const lines = [
-                            `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
-                            `- Title: ${chart.title || "(none)"}`,
-                            `- Type: ${chart.chartType}`
-                        ];
-                        if (chart.series.length > 0) {
-                            lines.push("- Series:");
-                            for (const series of chart.series) {
-                                lines.push(`  - ${series.name}`);
-                                if (series.axis === "secondary")
-                                    lines.push("    - Axis: secondary");
-                                if (series.categoriesRef)
-                                    lines.push(`    - categories: ${series.categoriesRef}`);
-                                if (series.valuesRef)
-                                    lines.push(`    - values: ${series.valuesRef}`);
-                            }
-                        }
-                        return lines.join("\n");
-                    })
-                ].join("\n\n")
-                : "";
-            const includeShapeDetails = options.includeShapeDetails !== false;
-            const shapeSection = includeShapeDetails && shapes.length > 0
-                ? [
-                    "",
-                    ...shapeBlocks.map((block, blockIndex) => {
-                        const shapeDetails = block.shapeIndexes
-                            .map((shapeIndex) => {
-                            const shape = shapes[shapeIndex];
-                            if (!shape)
-                                return "";
-                            const lines = [
-                                `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
-                                ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                            ];
-                            if (shape.svgPath) {
-                                lines.push(`- SVG: ${shape.svgPath}`);
-                                lines.push("");
-                                lines.push(`![${shape.svgFilename || `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                            }
-                            return lines.join("\n");
-                        })
-                            .filter(Boolean)
-                            .join("\n\n");
-                        return [
-                            `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
-                            `- Shapes: ${block.shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ")}`,
-                            `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
-                            ...(shapeDetails ? ["", shapeDetails] : [])
-                        ].join("\n");
-                    }),
-                    ...(() => {
-                        const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
-                        const ungrouped = shapes
-                            .map((shape, index) => ({ shape, index }))
-                            .filter(({ index }) => !grouped.has(index));
-                        if (ungrouped.length === 0) {
-                            return [];
-                        }
-                        return [
-                            "",
-                            "### Ungrouped Shapes",
-                            "",
-                            ...ungrouped.map(({ shape, index }) => {
-                                const lines = [
-                                    `#### Shape: ${String(index + 1).padStart(3, "0")} (${shape.anchor})`,
-                                    ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                                ];
-                                if (shape.svgPath) {
-                                    lines.push(`- SVG: ${shape.svgPath}`);
-                                    lines.push("");
-                                    lines.push(`![${shape.svgFilename || `shape_${String(index + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                                }
-                                return lines.join("\n");
-                            })
-                        ];
-                    })()
-                ].join("\n\n")
-                : "";
+        }
+        function collectSheetRenderState(workbook, sheet, options = {}) {
+            const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+            const charts = sheet.charts || [];
+            const shapes = sheet.shapes || [];
+            const shapeBlocks = deps.extractShapeBlocks(shapes, {
+                defaultCellWidthEmu: deps.defaultCellWidthEmu,
+                defaultCellHeightEmu: deps.defaultCellHeightEmu,
+                shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
+                shapeBlockGapYEmu: deps.shapeBlockGapYEmu
+            });
+            const treatFirstRowAsHeader = resolvedOptions.treatFirstRowAsHeader;
+            const tableDetectionMode = resolvedOptions.tableDetectionMode;
+            const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
+            const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, resolvedOptions);
+            const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
+            const formulaDiagnostics = createFormulaDiagnostics(sheet);
+            const sections = [
+                ...createNarrativeSections(narrativeBlocks),
+                ...createTableSections(workbook, sheet, tables, resolvedOptions, treatFirstRowAsHeader)
+            ];
+            sortContentSections(sections);
+            const groupedSections = createGroupedSections(sectionBlocks, sections);
+            const body = renderGroupedSectionBody(groupedSections);
+            const imageSection = renderImageSection(sheet);
+            const chartSection = renderChartSection(charts);
+            const includeShapeDetails = resolvedOptions.includeShapeDetails;
+            const shapeSection = renderShapeSection(shapes, shapeBlocks, includeShapeDetails);
+            return {
+                resolvedOptions,
+                charts,
+                shapes,
+                shapeBlocks,
+                tables,
+                narrativeBlocks,
+                sectionBlocks,
+                formulaDiagnostics,
+                sections,
+                groupedSections,
+                body,
+                imageSection,
+                chartSection,
+                shapeSection
+            };
+        }
+        function createSheetMarkdownText(workbook, sheet, state) {
             const markdown = [
                 `# Book: ${workbook.name}`,
                 "",
                 `## Sheet: ${sheet.name}`,
                 "",
-                body || "_No extractable body content was found._",
-                chartSection,
-                shapeSection,
-                imageSection
+                state.body || "_No extractable body content was found._",
+                state.chartSection,
+                state.shapeSection,
+                state.imageSection
             ].join("\n");
+            return markdown;
+        }
+        function createSheetSummary(sheet, state) {
+            return {
+                outputMode: state.resolvedOptions.outputMode,
+                formattingMode: state.resolvedOptions.formattingMode,
+                tableDetectionMode: state.resolvedOptions.tableDetectionMode,
+                sections: state.sectionBlocks.length,
+                tables: state.tables.length,
+                narrativeBlocks: state.narrativeBlocks.length,
+                merges: sheet.merges.length,
+                images: sheet.images.length,
+                charts: state.charts.length,
+                cells: sheet.cells.length,
+                tableScores: state.tables.map((table) => ({
+                    range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
+                    score: table.score,
+                    reasons: [...table.reasonSummary]
+                })),
+                formulaDiagnostics: state.formulaDiagnostics
+            };
+        }
+        function convertSheetToMarkdown(workbook, sheet, options = {}) {
+            const state = collectSheetRenderState(workbook, sheet, options);
+            const fileName = deps.createOutputFileName(workbook.name, sheet.index, sheet.name, state.resolvedOptions.outputMode, state.resolvedOptions.formattingMode);
             return {
                 fileName,
                 sheetName: sheet.name,
-                markdown,
-                summary: {
-                    outputMode: options.outputMode || "display",
-                    formattingMode: options.formattingMode || "plain",
-                    tableDetectionMode,
-                    sections: sectionBlocks.length,
-                    tables: tables.length,
-                    narrativeBlocks: narrativeBlocks.length,
-                    merges: sheet.merges.length,
-                    images: sheet.images.length,
-                    charts: charts.length,
-                    cells: sheet.cells.length,
-                    tableScores: tables.map((table) => ({
-                        range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
-                        score: table.score,
-                        reasons: [...table.reasonSummary]
-                    })),
-                    formulaDiagnostics
-                }
+                markdown: createSheetMarkdownText(workbook, sheet, state),
+                summary: createSheetSummary(sheet, state)
             };
         }
         function convertWorkbookToMarkdownFiles(workbook, options = {}) {
@@ -449,8 +594,19 @@
             formatCellForMarkdown,
             isCellInAnyTable,
             splitNarrativeRowSegments,
+            collectNarrativeCellsByRow,
+            buildNarrativeItems,
             extractNarrativeBlocks,
             extractSectionBlocks,
+            sortContentSections,
+            createGroupedSections,
+            renderGroupedSectionBody,
+            collectSheetRenderState,
+            createSheetMarkdownText,
+            createSheetSummary,
+            renderImageSection,
+            renderChartSection,
+            renderShapeSection,
             convertSheetToMarkdown,
             convertWorkbookToMarkdownFiles
         };

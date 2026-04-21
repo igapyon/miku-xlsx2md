@@ -46,6 +46,31 @@
     }[];
   };
 
+  type ParsedRangeRef = {
+    sheetName: string;
+    start: string;
+    end: string;
+  };
+
+  type RangeEntries = {
+    rawValues: string[];
+    numericValues: number[];
+  };
+
+  type ResolveCellValue = (sheetName: string, address: string) => string;
+  type ResolveRangeValues = (sheetName: string, rangeText: string) => number[];
+  type ResolveRangeEntries = (sheetName: string, rangeText: string) => RangeEntries;
+  type ResolveDefinedNameScalarValue = ((sheetName: string, name: string) => string | null) | null;
+  type ResolveDefinedNameRange = ((sheetName: string, name: string) => ParsedRangeRef | null) | null;
+  type ResolveStructuredRange = ((sheetName: string, text: string) => ParsedRangeRef | null) | null;
+  type ParsedCellPoint = { row: number; col: number };
+  type ParsedCellRect = {
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+  };
+
   type ResolverDeps = {
     normalizeStructuredTableKey: (value: string) => string;
     normalizeFormulaSheetName: (rawName: string) => string;
@@ -55,11 +80,11 @@
     resolveScalarFormulaValue: (
       expression: string,
       currentSheetName: string,
-      resolveCellValue: (sheetName: string, address: string) => string,
-      resolveRangeValues?: (sheetName: string, rangeText: string) => number[],
-      resolveRangeEntries?: (sheetName: string, rangeText: string) => { rawValues: string[]; numericValues: number[] }
+      resolveCellValue: ResolveCellValue,
+      resolveRangeValues?: ResolveRangeValues,
+      resolveRangeEntries?: ResolveRangeEntries
     ) => string | null;
-    parseQualifiedRangeReference: (text: string, currentSheetName: string) => { sheetName: string; start: string; end: string } | null;
+    parseQualifiedRangeReference: (text: string, currentSheetName: string) => ParsedRangeRef | null;
     findTopLevelOperatorIndex: (expression: string, operator: string) => number;
     parseWholeFunctionCall: (formulaText: string, targetNames: string[]) => { name: string; argsText: string } | null;
     splitFormulaArguments: (argText: string) => string[];
@@ -69,18 +94,51 @@
     tryResolveFormulaExpressionDetailed: (
       formulaText: string,
       currentSheetName: string,
-      resolveCellValue: (sheetName: string, address: string) => string,
-      resolveRangeValues?: (sheetName: string, rangeText: string) => number[],
-      resolveRangeEntries?: (sheetName: string, rangeText: string) => { rawValues: string[]; numericValues: number[] },
+      resolveCellValue: ResolveCellValue,
+      resolveRangeValues?: ResolveRangeValues,
+      resolveRangeEntries?: ResolveRangeEntries,
       currentAddress?: string
     ) => { value: string; source: FormulaResolutionSource } | null;
     applyResolvedFormulaValue: (cell: ParsedCell, resolvedValue: string, resolutionSource?: FormulaResolutionSource) => void;
     setDefinedNameResolvers?: (
-      scalar: ((sheetName: string, name: string) => string | null) | null,
-      range: ((sheetName: string, name: string) => { sheetName: string; start: string; end: string } | null) | null,
-      structured: ((sheetName: string, text: string) => { sheetName: string; start: string; end: string } | null) | null
+      scalar: ResolveDefinedNameScalarValue,
+      range: ResolveDefinedNameRange,
+      structured: ResolveStructuredRange
     ) => void;
   };
+
+  function normalizeCellRect(start: ParsedCellPoint, end: ParsedCellPoint): ParsedCellRect | null {
+    if (!start.row || !start.col || !end.row || !end.col) {
+      return null;
+    }
+    return {
+      startRow: Math.min(start.row, end.row),
+      endRow: Math.max(start.row, end.row),
+      startCol: Math.min(start.col, end.col),
+      endCol: Math.max(start.col, end.col)
+    };
+  }
+
+  function getResolvedFormulaCellValue(cell: ParsedCell): string {
+    const rawValue = String(cell.rawValue || "");
+    const outputValue = String(cell.outputValue || "");
+    if (rawValue && rawValue !== cell.formulaText) {
+      return rawValue;
+    }
+    return outputValue || rawValue;
+  }
+
+  function getUnresolvedFormulaCellValue(cell: ParsedCell): string {
+    const rawValue = String(cell.rawValue || "");
+    const outputValue = String(cell.outputValue || "");
+    if (rawValue && rawValue !== cell.formulaText) {
+      return rawValue;
+    }
+    if (outputValue && outputValue !== cell.formulaText) {
+      return outputValue;
+    }
+    return "";
+  }
 
   function buildFormulaResolver(workbook: ParsedWorkbook, deps: ResolverDeps) {
     const sheetMap = new Map<string, ParsedSheet>();
@@ -154,22 +212,9 @@
       }
       if (cell.formulaText) {
         if (cell.resolutionStatus === "resolved") {
-          const rawValue = String(cell.rawValue || "");
-          const outputValue = String(cell.outputValue || "");
-          if (rawValue && rawValue !== cell.formulaText) {
-            return rawValue;
-          }
-          return outputValue || rawValue;
+          return getResolvedFormulaCellValue(cell);
         }
-        const rawValue = String(cell.rawValue || "");
-        const outputValue = String(cell.outputValue || "");
-        if (rawValue && rawValue !== cell.formulaText) {
-          return rawValue;
-        }
-        if (outputValue && outputValue !== cell.formulaText) {
-          return outputValue;
-        }
-        return "";
+        return getUnresolvedFormulaCellValue(cell);
       }
       if (["s", "inlineStr", "str", "e", "b"].includes(cell.valueType)) {
         return String(cell.outputValue || cell.rawValue || "");
@@ -177,24 +222,22 @@
       return String(cell.rawValue || cell.outputValue || "");
     }
 
-    function resolveRangeEntries(sheetName: string, rangeText: string): { rawValues: string[]; numericValues: number[] } {
+    function resolveRangeEntries(sheetName: string, rangeText: string): RangeEntries {
       const range = deps.parseRangeAddress(rangeText);
       if (!range) {
         return { rawValues: [], numericValues: [] };
       }
-      const start = deps.parseCellAddress(range.start);
-      const end = deps.parseCellAddress(range.end);
-      if (!start.row || !start.col || !end.row || !end.col) {
+      const cellRect = normalizeCellRect(
+        deps.parseCellAddress(range.start),
+        deps.parseCellAddress(range.end)
+      );
+      if (!cellRect) {
         return { rawValues: [], numericValues: [] };
       }
-      const startRow = Math.min(start.row, end.row);
-      const endRow = Math.max(start.row, end.row);
-      const startCol = Math.min(start.col, end.col);
-      const endCol = Math.max(start.col, end.col);
       const rawValues: string[] = [];
       const numericValues: number[] = [];
-      for (let row = startRow; row <= endRow; row += 1) {
-        for (let col = startCol; col <= endCol; col += 1) {
+      for (let row = cellRect.startRow; row <= cellRect.endRow; row += 1) {
+        for (let col = cellRect.startCol; col <= cellRect.endCol; col += 1) {
           const rawValue = resolveCellValue(sheetName, `${deps.colToLetters(col)}${row}`);
           rawValues.push(rawValue);
           if (String(rawValue || "").trim() === "") continue;
@@ -219,7 +262,7 @@
       return scalar == null || scalar === "" ? null : scalar;
     }
 
-    function resolveDefinedNameRange(sheetName: string, name: string): { sheetName: string; start: string; end: string } | null {
+    function resolveDefinedNameRange(sheetName: string, name: string): ParsedRangeRef | null {
       const formulaText = lookupDefinedNameFormula(sheetName, name);
       if (!formulaText) return null;
       const normalized = formulaText.replace(/^=/, "").trim();
@@ -237,11 +280,12 @@
       const args = deps.splitFormulaArguments(indexCall.argsText.trim());
       if (args.length < 2 || args.length > 3) return null;
       const rangeRef = deps.parseQualifiedRangeReference(args[0], sheetName);
+      const resolveRangeValues: ResolveRangeValues = (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues;
       const rowIndex = Number(deps.resolveScalarFormulaValue(
         args[1],
         sheetName,
         resolveCellValue,
-        (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues,
+        resolveRangeValues,
         resolveRangeEntries
       ));
       const colIndex = args.length === 3
@@ -249,21 +293,19 @@
           args[2],
           sheetName,
           resolveCellValue,
-          (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues,
+          resolveRangeValues,
           resolveRangeEntries
         ))
         : 1;
       if (!rangeRef || Number.isNaN(rowIndex) || Number.isNaN(colIndex) || rowIndex < 1 || colIndex < 1) return null;
-      const rangeStart = deps.parseCellAddress(rangeRef.start);
-      const rangeEnd = deps.parseCellAddress(rangeRef.end);
-      if (!rangeStart.row || !rangeStart.col || !rangeEnd.row || !rangeEnd.col) return null;
-      const startRow = Math.min(rangeStart.row, rangeEnd.row);
-      const endRow = Math.max(rangeStart.row, rangeEnd.row);
-      const startCol = Math.min(rangeStart.col, rangeEnd.col);
-      const endCol = Math.max(rangeStart.col, rangeEnd.col);
-      const targetRow = startRow + Math.trunc(rowIndex) - 1;
-      const targetCol = startCol + Math.trunc(colIndex) - 1;
-      if (targetRow > endRow || targetCol > endCol) return null;
+      const cellRect = normalizeCellRect(
+        deps.parseCellAddress(rangeRef.start),
+        deps.parseCellAddress(rangeRef.end)
+      );
+      if (!cellRect) return null;
+      const targetRow = cellRect.startRow + Math.trunc(rowIndex) - 1;
+      const targetCol = cellRect.startCol + Math.trunc(colIndex) - 1;
+      if (targetRow > cellRect.endRow || targetCol > cellRect.endCol) return null;
       return {
         sheetName: startRef.sheetName,
         start: startRef.address,
@@ -271,7 +313,7 @@
       };
     }
 
-    function resolveStructuredRange(sheetName: string, text: string): { sheetName: string; start: string; end: string } | null {
+    function resolveStructuredRange(sheetName: string, text: string): ParsedRangeRef | null {
       const match = String(text || "").trim().match(/^(.+?)\[([^\]]+)\]$/);
       if (!match) return null;
       const tableKey = deps.normalizeStructuredTableKey(match[1].replace(/^'(.*)'$/, "$1"));
@@ -281,13 +323,15 @@
       if (!table) return null;
       const columnIndex = table.columns.findIndex((columnName) => deps.normalizeStructuredTableKey(columnName) === columnKey);
       if (columnIndex < 0) return null;
-      const startAddress = deps.parseCellAddress(table.start);
-      const endAddress = deps.parseCellAddress(table.end);
-      if (!startAddress.row || !startAddress.col || !endAddress.row || !endAddress.col) return null;
-      const firstDataRow = Math.min(startAddress.row, endAddress.row) + Math.max(0, table.headerRowCount);
-      const lastDataRow = Math.max(startAddress.row, endAddress.row) - Math.max(0, table.totalsRowCount);
+      const cellRect = normalizeCellRect(
+        deps.parseCellAddress(table.start),
+        deps.parseCellAddress(table.end)
+      );
+      if (!cellRect) return null;
+      const firstDataRow = cellRect.startRow + Math.max(0, table.headerRowCount);
+      const lastDataRow = cellRect.endRow - Math.max(0, table.totalsRowCount);
       if (firstDataRow > lastDataRow) return null;
-      const col = Math.min(startAddress.col, endAddress.col) + columnIndex;
+      const col = cellRect.startCol + columnIndex;
       const colLetters = deps.colToLetters(col);
       return {
         sheetName: table.sheetName || sheetName,

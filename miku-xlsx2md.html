@@ -3898,6 +3898,9 @@ if (!customElements.get("lht-page-menu")) {
     globalThis.requireXlsx2mdTextEncoding = function requireXlsx2mdTextEncoding() {
         return globalThis.getXlsx2mdModuleRegistry().requireModule("textEncoding", "xlsx2md text encoding module is not loaded");
     };
+    globalThis.requireXlsx2mdMarkdownOptions = function requireXlsx2mdMarkdownOptions() {
+        return globalThis.getXlsx2mdModuleRegistry().requireModule("markdownOptions", "xlsx2md markdown options module is not loaded");
+    };
     globalThis.requireXlsx2mdMarkdownEscape = function requireXlsx2mdMarkdownEscape() {
         return globalThis.getXlsx2mdModuleRegistry().requireModule("markdownEscape", "xlsx2md markdown escape module is not loaded");
     };
@@ -4482,10 +4485,13 @@ if (!customElements.get("lht-page-menu")) {
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const MARKDOWN_UNSAFE_UNICODE_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u206F\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]/g;
+    const MARKDOWN_LINE_BREAK_REGEX = /\r\n?|\n/g;
+    function normalizeMarkdownNewlines(text, replacement = "\n") {
+        return String(text || "").replace(MARKDOWN_LINE_BREAK_REGEX, replacement);
+    }
     function normalizeMarkdownText(text) {
-        return String(text || "")
+        return normalizeMarkdownNewlines(String(text || ""), " ")
             .replace(MARKDOWN_UNSAFE_UNICODE_REGEX, " ")
-            .replace(/\r\n?|\n/g, " ")
             .replace(/\t/g, " ");
     }
     function escapeMarkdownPipes(text) {
@@ -4501,6 +4507,7 @@ if (!customElements.get("lht-page-menu")) {
         return normalizeMarkdownText(text).replace(/^([-*+]|\d+\.)\s+/, "");
     }
     const markdownNormalizeApi = {
+        normalizeMarkdownNewlines,
         normalizeMarkdownText,
         escapeMarkdownPipes,
         normalizeMarkdownTableCell,
@@ -4518,11 +4525,54 @@ if (!customElements.get("lht-page-menu")) {
  */
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
-    function escapeMarkdownLineStart(text) {
+    const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
+    function escapeMarkdownLineStartSegment(text) {
         return String(text || "")
             .replace(/^(\s*)([#>])/u, "$1\\$2")
             .replace(/^(\s*)([-+*])(\s+)/u, "$1\\$2$3")
             .replace(/^(\s*)(\d+)\.(\s+)/u, "$1$2\\.$3");
+    }
+    function escapeMarkdownLineStart(text) {
+        return markdownNormalizeHelper
+            .normalizeMarkdownNewlines(text)
+            .split("\n")
+            .map((line) => escapeMarkdownLineStartSegment(line))
+            .join("\n");
+    }
+    function getEscapedMarkdownLiteralText(ch, atLineStart, nextChar) {
+        if (ch === "\\")
+            return "\\\\";
+        if (ch === "&")
+            return "&amp;";
+        if (ch === "<")
+            return "&lt;";
+        if (ch === ">")
+            return "&gt;";
+        if (/[`*_{}\[\]()!|~]/.test(ch))
+            return `\\${ch}`;
+        if (atLineStart && ch === "#")
+            return `\\${ch}`;
+        if (atLineStart && /[-+*]/.test(ch) && /\s/u.test(nextChar))
+            return `\\${ch}`;
+        return null;
+    }
+    function parseOrderedListMarker(source, index, atLineStart) {
+        if (!atLineStart || !/\d/u.test(source[index] || "")) {
+            return null;
+        }
+        let digits = source[index];
+        let cursor = index + 1;
+        while (cursor < source.length && /\d/u.test(source[cursor])) {
+            digits += source[cursor];
+            cursor += 1;
+        }
+        if (source[cursor] !== "." || !/\s/u.test(source[cursor + 1] || "")) {
+            return null;
+        }
+        return {
+            digits,
+            dotIndex: cursor
+        };
     }
     function escapeMarkdownLiteralParts(text) {
         const source = String(text || "");
@@ -4544,52 +4594,18 @@ if (!customElements.get("lht-page-menu")) {
             const ch = source[index];
             const atLineStart = index === 0;
             const next = source[index + 1] || "";
-            if (ch === "\\") {
-                pushEscaped("\\\\", ch);
+            const escapedText = getEscapedMarkdownLiteralText(ch, atLineStart, next);
+            if (escapedText) {
+                pushEscaped(escapedText, ch);
                 continue;
             }
-            if (ch === "&") {
-                pushEscaped("&amp;", ch);
+            const orderedListMarker = parseOrderedListMarker(source, index, atLineStart);
+            if (orderedListMarker) {
+                pushTextBuffer();
+                parts.push({ kind: "text", text: orderedListMarker.digits, rawText: orderedListMarker.digits });
+                parts.push({ kind: "escaped", text: "\\.", rawText: "." });
+                index = orderedListMarker.dotIndex;
                 continue;
-            }
-            if (ch === "<") {
-                pushEscaped("&lt;", ch);
-                continue;
-            }
-            if (ch === ">") {
-                if (atLineStart) {
-                    pushEscaped("&gt;", ch);
-                    continue;
-                }
-                pushEscaped("&gt;", ch);
-                continue;
-            }
-            if (/[`*_{}\[\]()!|~]/.test(ch)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /[#]/.test(ch)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /[-+*]/.test(ch) && /\s/u.test(next)) {
-                pushEscaped(`\\${ch}`, ch);
-                continue;
-            }
-            if (atLineStart && /\d/u.test(ch)) {
-                let digitRun = ch;
-                let cursor = index + 1;
-                while (cursor < source.length && /\d/u.test(source[cursor])) {
-                    digitRun += source[cursor];
-                    cursor += 1;
-                }
-                if (source[cursor] === "." && /\s/u.test(source[cursor + 1] || "")) {
-                    pushTextBuffer();
-                    parts.push({ kind: "text", text: digitRun, rawText: digitRun });
-                    parts.push({ kind: "escaped", text: "\\.", rawText: "." });
-                    index = cursor;
-                    continue;
-                }
             }
             buffer += ch;
         }
@@ -4597,8 +4613,8 @@ if (!customElements.get("lht-page-menu")) {
         return parts;
     }
     function escapeMarkdownLiteralText(text) {
-        return String(text || "")
-            .replace(/\r\n?/g, "\n")
+        return markdownNormalizeHelper
+            .normalizeMarkdownNewlines(text)
             .split("\n")
             .map((line) => escapeMarkdownLiteralParts(line).map((part) => part.text).join(""))
             .join("\n");
@@ -4621,7 +4637,7 @@ if (!customElements.get("lht-page-menu")) {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
     function escapeMarkdownTableCell(text) {
-        return markdownNormalizeHelper.escapeMarkdownPipes(markdownNormalizeHelper.normalizeMarkdownText(text));
+        return markdownNormalizeHelper.normalizeMarkdownTableCell(text);
     }
     const markdownTableEscapeApi = {
         escapeMarkdownTableCell
@@ -5062,31 +5078,43 @@ if (!customElements.get("lht-page-menu")) {
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
+    function normalizeNarrativeText(text) {
+        return markdownNormalizeHelper.normalizeMarkdownText(text);
+    }
+    function formatNarrativeHeading(text) {
+        return `### ${markdownNormalizeHelper.normalizeMarkdownHeadingText(text)}`;
+    }
+    function formatNarrativeBullet(text) {
+        return `- ${markdownNormalizeHelper.normalizeMarkdownListItemText(text)}`;
+    }
+    function isIndentedChildItem(parent, child) {
+        return !!(parent && child && child.startCol > parent.startCol);
+    }
     function renderNarrativeBlock(block) {
         if (!block.items || block.items.length === 0) {
-            return block.lines.map((line) => markdownNormalizeHelper.normalizeMarkdownText(line)).join("\n");
+            return block.lines.map((line) => normalizeNarrativeText(line)).join("\n");
         }
         const parts = [];
         let index = 0;
         while (index < block.items.length) {
             const current = block.items[index];
             const next = block.items[index + 1];
-            if (current && next && next.startCol > current.startCol) {
+            if (isIndentedChildItem(current, next)) {
                 let childEnd = index + 1;
-                while (childEnd < block.items.length && block.items[childEnd].startCol > current.startCol) {
+                while (childEnd < block.items.length && isIndentedChildItem(current, block.items[childEnd])) {
                     childEnd += 1;
                 }
                 const childLines = block.items
                     .slice(index + 1, childEnd)
-                    .map((item) => `- ${markdownNormalizeHelper.normalizeMarkdownListItemText(item.text)}`);
-                parts.push(`### ${markdownNormalizeHelper.normalizeMarkdownHeadingText(current.text)}`);
+                    .map((item) => formatNarrativeBullet(item.text));
+                parts.push(formatNarrativeHeading(current.text));
                 if (childLines.length > 0) {
                     parts.push(childLines.join("\n"));
                 }
                 index = childEnd;
                 continue;
             }
-            parts.push(markdownNormalizeHelper.normalizeMarkdownText(current.text));
+            parts.push(normalizeNarrativeText(current.text));
             index += 1;
         }
         return parts.join("\n\n");
@@ -5095,7 +5123,7 @@ if (!customElements.get("lht-page-menu")) {
         if (!block || !block.items || block.items.length < 2) {
             return false;
         }
-        return block.items[1].startCol > block.items[0].startCol;
+        return isIndentedChildItem(block.items[0], block.items[1]);
     }
     const narrativeStructureApi = {
         renderNarrativeBlock,
@@ -5468,11 +5496,15 @@ if (!customElements.get("lht-page-menu")) {
     const textEncodingHelper = requireXlsx2mdTextEncoding();
     const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
     const markdownTableEscapeHelper = requireXlsx2mdMarkdownTableEscape();
+    const FORMULA_STATUSES = ["resolved", "fallback_formula", "unsupported_external"];
     function normalizeMarkdownLineBreaks(text) {
         return markdownNormalizeHelper.normalizeMarkdownText(text);
     }
     function escapeMarkdownCell(text) {
         return markdownTableEscapeHelper.escapeMarkdownTableCell(text);
+    }
+    function createBlankRow(columnCount) {
+        return new Array(columnCount).fill("");
     }
     function renderMarkdownTable(rows, treatFirstRowAsHeader) {
         if (rows.length === 0) {
@@ -5480,9 +5512,9 @@ if (!customElements.get("lht-page-menu")) {
         }
         const workingRows = rows.map((row) => row.map((cell) => escapeMarkdownCell(cell)));
         if (workingRows.length === 1 && treatFirstRowAsHeader) {
-            workingRows.push(new Array(workingRows[0].length).fill(""));
+            workingRows.push(createBlankRow(workingRows[0].length));
         }
-        const header = treatFirstRowAsHeader ? workingRows[0] : new Array(workingRows[0].length).fill("");
+        const header = treatFirstRowAsHeader ? workingRows[0] : createBlankRow(workingRows[0].length);
         const body = treatFirstRowAsHeader ? workingRows.slice(1) : workingRows;
         const lines = [
             `| ${header.join(" | ")} |`,
@@ -5503,17 +5535,38 @@ if (!customElements.get("lht-page-menu")) {
             .replace(/^[_ .-]+|[_ .-]+$/g, "");
         return sanitized || fallback;
     }
+    function stripWorkbookExtension(workbookName) {
+        return String(workbookName || "").replace(/\.xlsx$/i, "");
+    }
+    function createCombinedMarkdownFileName(workbookName) {
+        const baseName = stripWorkbookExtension(String(workbookName || "workbook")) || "workbook";
+        return `${baseName}.md`;
+    }
+    function createExportEntryName(relativePath) {
+        return `output/${relativePath}`;
+    }
     function createOutputFileName(workbookName, sheetIndex, sheetName, outputMode = "display", formattingMode = "plain") {
-        const bookBase = sanitizeFileNameSegment(workbookName.replace(/\.xlsx$/i, ""), "workbook");
+        const bookBase = sanitizeFileNameSegment(stripWorkbookExtension(workbookName), "workbook");
         const safeSheetName = sanitizeFileNameSegment(sheetName, `Sheet${sheetIndex}`);
         void outputMode;
         void formattingMode;
         return `${bookBase}_${String(sheetIndex).padStart(3, "0")}_${safeSheetName}.md`;
     }
+    function countFormulaStatuses(formulaDiagnostics) {
+        const counts = {
+            resolved: 0,
+            fallback_formula: 0,
+            unsupported_external: 0
+        };
+        for (const item of formulaDiagnostics) {
+            if (item.status && item.status in counts) {
+                counts[item.status] += 1;
+            }
+        }
+        return counts;
+    }
     function createSummaryText(markdownFile) {
-        const resolvedCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "resolved").length;
-        const fallbackCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "fallback_formula").length;
-        const unsupportedCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "unsupported_external").length;
+        const formulaCounts = countFormulaStatuses(markdownFile.summary.formulaDiagnostics);
         return [
             `Output file: ${markdownFile.fileName}`,
             `Output mode: ${markdownFile.summary.outputMode}`,
@@ -5526,27 +5579,28 @@ if (!customElements.get("lht-page-menu")) {
             `Images: ${markdownFile.summary.images}`,
             `Charts: ${markdownFile.summary.charts}`,
             `Analyzed cells: ${markdownFile.summary.cells}`,
-            `Formula resolved: ${resolvedCount}`,
-            `Formula fallback_formula: ${fallbackCount}`,
-            `Formula unsupported_external: ${unsupportedCount}`,
+            ...FORMULA_STATUSES.map((status) => `Formula ${status}: ${formulaCounts[status]}`),
             ...markdownFile.summary.tableScores.map((detail) => `Table candidate ${detail.range}: score ${detail.score} / ${detail.reasons.join(", ")}`)
         ].join("\n");
     }
+    function stripBookHeading(markdown, bookHeading) {
+        const lines = String(markdown || "").split("\n");
+        if (lines[0] === bookHeading) {
+            lines.shift();
+            while (lines[0] === "") {
+                lines.shift();
+            }
+        }
+        return lines.join("\n");
+    }
     function createCombinedMarkdownExportFile(workbook, markdownFiles) {
-        const fileName = `${String(workbook.name || "workbook").replace(/\.xlsx$/i, "")}.md`;
+        const fileName = createCombinedMarkdownFileName(workbook.name);
         const bookHeading = `# Book: ${String(workbook.name || "workbook.xlsx")}`;
         const content = [
             bookHeading,
-            ...markdownFiles.map((markdownFile) => {
-                const lines = String(markdownFile.markdown || "").split("\n");
-                if (lines[0] === bookHeading) {
-                    lines.shift();
-                    while (lines[0] === "") {
-                        lines.shift();
-                    }
-                }
-                return lines.join("\n");
-            }).filter((markdown) => markdown.trim().length > 0)
+            ...markdownFiles
+                .map((markdownFile) => stripBookHeading(markdownFile.markdown, bookHeading))
+                .filter((markdown) => markdown.trim().length > 0)
         ].join("\n\n");
         return { fileName, content };
     }
@@ -5561,19 +5615,22 @@ if (!customElements.get("lht-page-menu")) {
             mimeType: textEncodingHelper.createTextMimeType(options)
         };
     }
-    function createExportEntries(workbook, markdownFiles, options = {}) {
-        const entries = [];
-        if (markdownFiles.length > 0) {
-            const combined = createCombinedMarkdownExportPayload(workbook, markdownFiles, options);
-            entries.push({
-                name: `output/${combined.fileName}`,
-                data: combined.data
-            });
+    function createMarkdownExportEntry(workbook, markdownFiles, options = {}) {
+        if (markdownFiles.length === 0) {
+            return null;
         }
+        const combined = createCombinedMarkdownExportPayload(workbook, markdownFiles, options);
+        return {
+            name: createExportEntryName(combined.fileName),
+            data: combined.data
+        };
+    }
+    function createAssetExportEntries(workbook) {
+        const entries = [];
         for (const sheet of workbook.sheets) {
             for (const image of sheet.images) {
                 entries.push({
-                    name: `output/${image.path}`,
+                    name: createExportEntryName(image.path),
                     data: image.data
                 });
             }
@@ -5581,10 +5638,18 @@ if (!customElements.get("lht-page-menu")) {
                 if (!shape.svgPath || !shape.svgData)
                     continue;
                 entries.push({
-                    name: `output/${shape.svgPath}`,
+                    name: createExportEntryName(shape.svgPath),
                     data: shape.svgData
                 });
             }
+        }
+        return entries;
+    }
+    function createExportEntries(workbook, markdownFiles, options = {}) {
+        const entries = createAssetExportEntries(workbook);
+        const markdownEntry = createMarkdownExportEntry(workbook, markdownFiles, options);
+        if (markdownEntry) {
+            entries.unshift(markdownEntry);
         }
         return entries;
     }
@@ -5597,9 +5662,14 @@ if (!customElements.get("lht-page-menu")) {
         escapeMarkdownCell,
         renderMarkdownTable,
         sanitizeFileNameSegment,
+        stripWorkbookExtension,
+        createCombinedMarkdownFileName,
+        createExportEntryName,
         createOutputFileName,
         createSummaryText,
         createCombinedMarkdownExportFile,
+        createMarkdownExportEntry,
+        createAssetExportEntries,
         createExportEntries,
         createWorkbookExportArchive,
         normalizeMarkdownLineBreaks,
@@ -5617,6 +5687,7 @@ if (!customElements.get("lht-page-menu")) {
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
     function createSheetMarkdownApi(deps) {
+        const markdownOptions = requireXlsx2mdMarkdownOptions();
         const richTextRenderer = requireXlsx2mdRichTextRendererModule().createRichTextRendererApi({
             normalizeMarkdownText: deps.normalizeMarkdownText
         });
@@ -5673,41 +5744,70 @@ if (!customElements.get("lht-page-menu")) {
                 ? `[${label}](${href}) (${traceText})`
                 : `[${label}](${href})`;
         }
-        function formatCellForMarkdown(cell, options, workbook = null, sheet = null) {
+        function createDisplayCellForFormatting(cell, formattingMode) {
             var _a;
+            if (formattingMode !== "github" || !cell.hyperlink) {
+                return cell;
+            }
+            return {
+                ...cell,
+                textStyle: {
+                    ...cell.textStyle,
+                    underline: false
+                },
+                richTextRuns: ((_a = cell.richTextRuns) === null || _a === void 0 ? void 0 : _a.map((run) => ({
+                    ...run,
+                    underline: false
+                }))) || null
+            };
+        }
+        function createCellMarkdownValues(cell, formattingMode) {
+            const displayCell = createDisplayCellForFormatting(cell, formattingMode);
+            return {
+                displayValue: richTextRenderer.compactText(String(cell.outputValue || "")),
+                rawValue: richTextRenderer.compactText(String(cell.rawValue || "")),
+                displayMarkdown: richTextRenderer.renderCellDisplayText(displayCell, formattingMode)
+            };
+        }
+        function renderCellWithHyperlink(cell, text, context) {
+            return renderHyperlinkMarkdown(cell, text, context.workbook, context.sheet, context.options);
+        }
+        function renderDisplayModeCell(cell, values, context) {
+            return renderCellWithHyperlink(cell, values.displayMarkdown, context);
+        }
+        function renderRawModeCell(cell, values, context) {
+            return renderCellWithHyperlink(cell, values.rawValue || values.displayValue, context);
+        }
+        function renderBothModeCell(cell, values, context) {
+            if (values.rawValue && values.rawValue !== values.displayValue) {
+                if (values.displayMarkdown) {
+                    return `${renderCellWithHyperlink(cell, values.displayMarkdown, context)} [raw=${values.rawValue}]`;
+                }
+                return `[raw=${values.rawValue}]`;
+            }
+            return renderCellWithHyperlink(cell, values.displayMarkdown || values.rawValue, context);
+        }
+        function getCellMarkdownRenderer(outputMode) {
+            if (outputMode === "raw") {
+                return renderRawModeCell;
+            }
+            if (outputMode === "both") {
+                return renderBothModeCell;
+            }
+            return renderDisplayModeCell;
+        }
+        function formatCellForMarkdown(cell, options, workbook = null, sheet = null) {
             if (!cell)
                 return "";
-            const mode = options.outputMode || "display";
-            const formattingMode = options.formattingMode || "plain";
-            const displayCell = formattingMode === "github" && cell.hyperlink
-                ? {
-                    ...cell,
-                    textStyle: {
-                        ...cell.textStyle,
-                        underline: false
-                    },
-                    richTextRuns: ((_a = cell.richTextRuns) === null || _a === void 0 ? void 0 : _a.map((run) => ({
-                        ...run,
-                        underline: false
-                    }))) || null
-                }
-                : cell;
-            const displayValue = richTextRenderer.compactText(String(cell.outputValue || ""));
-            const rawValue = richTextRenderer.compactText(String(cell.rawValue || ""));
-            const displayMarkdown = richTextRenderer.renderCellDisplayText(displayCell, formattingMode);
-            if (mode === "raw") {
-                return renderHyperlinkMarkdown(cell, rawValue || displayValue, workbook, sheet, options);
-            }
-            if (mode === "both") {
-                if (rawValue && rawValue !== displayValue) {
-                    if (displayMarkdown) {
-                        return `${renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options)} [raw=${rawValue}]`;
-                    }
-                    return `[raw=${rawValue}]`;
-                }
-                return renderHyperlinkMarkdown(cell, displayMarkdown || rawValue, workbook, sheet, options);
-            }
-            return renderHyperlinkMarkdown(cell, displayMarkdown, workbook, sheet, options);
+            const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+            const formattingMode = resolvedOptions.formattingMode;
+            const values = createCellMarkdownValues(cell, formattingMode);
+            const renderCell = getCellMarkdownRenderer(resolvedOptions.outputMode);
+            return renderCell(cell, values, {
+                workbook,
+                sheet,
+                options
+            });
         }
         function isCellInAnyTable(row, col, tables) {
             return tables.some((table) => row >= table.startRow && row <= table.endRow && col >= table.startCol && col <= table.endCol);
@@ -5737,7 +5837,7 @@ if (!customElements.get("lht-page-menu")) {
                 values: segment.values
             }));
         }
-        function extractNarrativeBlocks(workbook, sheet, tables, options = {}) {
+        function collectNarrativeCellsByRow(sheet, tables) {
             const rowMap = new Map();
             for (const cell of sheet.cells) {
                 if (!cell.outputValue)
@@ -5748,128 +5848,262 @@ if (!customElements.get("lht-page-menu")) {
                 entries.push(cell);
                 rowMap.set(cell.row, entries);
             }
+            return rowMap;
+        }
+        function createNarrativeItem(rowNumber, segment) {
+            const text = segment.values.join(" ").trim();
+            return {
+                row: rowNumber,
+                startCol: segment.startCol,
+                text,
+                cellValues: segment.values
+            };
+        }
+        function createNarrativeItemsForRow(rowNumber, cells, options, workbook = null, sheet = null) {
+            return splitNarrativeRowSegments(cells, options, workbook, sheet)
+                .map((segment) => createNarrativeItem(rowNumber, segment))
+                .filter((item) => !!item.text);
+        }
+        function buildNarrativeItems(workbook, sheet, tables, options = {}) {
+            const rowMap = collectNarrativeCellsByRow(sheet, tables);
             const rowNumbers = Array.from(rowMap.keys()).sort((a, b) => a - b);
+            const items = [];
+            for (const rowNumber of rowNumbers) {
+                const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
+                items.push(...createNarrativeItemsForRow(rowNumber, cells, options, workbook, sheet));
+            }
+            return items;
+        }
+        function shouldStartNarrativeBlock(current, rowNumber, previousRow, startCol) {
+            return !current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3;
+        }
+        function createNarrativeBlockFromItem(item) {
+            return {
+                startRow: item.row,
+                startCol: item.startCol,
+                endRow: item.row,
+                lines: [item.text],
+                items: [item]
+            };
+        }
+        function appendNarrativeItem(block, item) {
+            block.lines.push(item.text);
+            block.endRow = item.row;
+            block.items.push(item);
+        }
+        function extractNarrativeBlocks(workbook, sheet, tables, options = {}) {
+            const items = buildNarrativeItems(workbook, sheet, tables, options);
             const blocks = [];
             let current = null;
             let previousRow = -100;
-            for (const rowNumber of rowNumbers) {
-                const cells = (rowMap.get(rowNumber) || []).slice().sort((a, b) => a.col - b.col);
-                const rowSegments = splitNarrativeRowSegments(cells, options, workbook, sheet);
-                for (const segment of rowSegments) {
-                    const rowText = segment.values.join(" ").trim();
-                    if (!rowText)
-                        continue;
-                    const startCol = segment.startCol;
-                    if (!current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3) {
-                        current = {
-                            startRow: rowNumber,
-                            startCol,
-                            endRow: rowNumber,
-                            lines: [rowText],
-                            items: [{
-                                    row: rowNumber,
-                                    startCol,
-                                    text: rowText,
-                                    cellValues: segment.values
-                                }]
-                        };
-                        blocks.push(current);
-                    }
-                    else {
-                        current.lines.push(rowText);
-                        current.endRow = rowNumber;
-                        current.items.push({
-                            row: rowNumber,
-                            startCol,
-                            text: rowText,
-                            cellValues: segment.values
-                        });
-                    }
-                    previousRow = rowNumber;
+            for (const item of items) {
+                if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
+                    current = createNarrativeBlockFromItem(item);
+                    blocks.push(current);
                 }
+                else {
+                    appendNarrativeItem(current, item);
+                }
+                previousRow = item.row;
             }
             return blocks;
         }
-        function extractSectionBlocks(sheet, tables, narrativeBlocks) {
+        function createNarrativeSectionAnchors(narrativeBlocks) {
+            return narrativeBlocks.map((block) => ({
+                startRow: block.startRow,
+                startCol: block.startCol,
+                endRow: block.endRow,
+                endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
+            }));
+        }
+        function createTableSectionAnchors(tables) {
+            return tables.map((table) => ({
+                startRow: table.startRow,
+                startCol: table.startCol,
+                endRow: table.endRow,
+                endCol: table.endCol
+            }));
+        }
+        function createPointSectionAnchor(address) {
+            const anchor = deps.parseCellAddress(address);
+            if (anchor.row > 0 && anchor.col > 0) {
+                return { startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col };
+            }
+            return null;
+        }
+        function createImageSectionAnchors(sheet) {
+            return sheet.images
+                .map((image) => createPointSectionAnchor(image.anchor))
+                .filter((anchor) => !!anchor);
+        }
+        function createChartSectionAnchors(charts) {
+            return charts
+                .map((chart) => createPointSectionAnchor(chart.anchor))
+                .filter((anchor) => !!anchor);
+        }
+        function createSectionAnchors(sheet, tables, narrativeBlocks) {
             const charts = sheet.charts || [];
-            const anchors = [];
-            for (const block of narrativeBlocks) {
-                anchors.push({
-                    startRow: block.startRow,
-                    startCol: block.startCol,
-                    endRow: block.endRow,
-                    endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
-                });
-            }
-            for (const table of tables) {
-                anchors.push({
-                    startRow: table.startRow,
-                    startCol: table.startCol,
-                    endRow: table.endRow,
-                    endCol: table.endCol
-                });
-            }
-            for (const image of sheet.images) {
-                const anchor = deps.parseCellAddress(image.anchor);
-                if (anchor.row > 0 && anchor.col > 0) {
-                    anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-                }
-            }
-            for (const chart of charts) {
-                const anchor = deps.parseCellAddress(chart.anchor);
-                if (anchor.row > 0 && anchor.col > 0) {
-                    anchors.push({ startRow: anchor.row, startCol: anchor.col, endRow: anchor.row, endCol: anchor.col });
-                }
-            }
-            if (anchors.length === 0) {
-                return [];
-            }
-            anchors.sort((left, right) => {
+            return [
+                ...createNarrativeSectionAnchors(narrativeBlocks),
+                ...createTableSectionAnchors(tables),
+                ...createImageSectionAnchors(sheet),
+                ...createChartSectionAnchors(charts)
+            ];
+        }
+        function sortSectionAnchors(anchors) {
+            return anchors.sort((left, right) => {
                 if (left.startRow !== right.startRow)
                     return left.startRow - right.startRow;
                 return left.startCol - right.startCol;
             });
+        }
+        function createSectionBlockFromAnchor(anchor) {
+            return {
+                startRow: anchor.startRow,
+                startCol: anchor.startCol,
+                endRow: anchor.endRow,
+                endCol: anchor.endCol
+            };
+        }
+        function shouldStartNewSectionBlock(current, anchor, previousEndRow) {
+            const verticalGapThreshold = 4;
+            const gap = anchor.startRow - previousEndRow;
+            return !current || gap > verticalGapThreshold;
+        }
+        function extendSectionBlock(section, anchor) {
+            section.startRow = Math.min(section.startRow, anchor.startRow);
+            section.startCol = Math.min(section.startCol, anchor.startCol);
+            section.endRow = Math.max(section.endRow, anchor.endRow);
+            section.endCol = Math.max(section.endCol, anchor.endCol);
+        }
+        function extractSectionBlocks(sheet, tables, narrativeBlocks) {
+            const anchors = sortSectionAnchors(createSectionAnchors(sheet, tables, narrativeBlocks));
+            if (anchors.length === 0) {
+                return [];
+            }
             const sections = [];
             let current = null;
             let previousEndRow = -100;
-            const verticalGapThreshold = 4;
             for (const anchor of anchors) {
-                const gap = anchor.startRow - previousEndRow;
-                if (!current || gap > verticalGapThreshold) {
-                    current = {
-                        startRow: anchor.startRow,
-                        startCol: anchor.startCol,
-                        endRow: anchor.endRow,
-                        endCol: anchor.endCol
-                    };
+                if (shouldStartNewSectionBlock(current, anchor, previousEndRow)) {
+                    current = createSectionBlockFromAnchor(anchor);
                     sections.push(current);
                 }
                 else {
-                    current.startRow = Math.min(current.startRow, anchor.startRow);
-                    current.startCol = Math.min(current.startCol, anchor.startCol);
-                    current.endRow = Math.max(current.endRow, anchor.endRow);
-                    current.endCol = Math.max(current.endCol, anchor.endCol);
+                    extendSectionBlock(current, anchor);
                 }
                 previousEndRow = Math.max(previousEndRow, anchor.endRow);
             }
             return sections;
         }
-        function convertSheetToMarkdown(workbook, sheet, options = {}) {
-            var _a;
-            const charts = sheet.charts || [];
-            const shapes = sheet.shapes || [];
-            const shapeBlocks = deps.extractShapeBlocks(shapes, {
-                defaultCellWidthEmu: deps.defaultCellWidthEmu,
-                defaultCellHeightEmu: deps.defaultCellHeightEmu,
-                shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
-                shapeBlockGapYEmu: deps.shapeBlockGapYEmu
-            });
-            const treatFirstRowAsHeader = options.treatFirstRowAsHeader !== false;
-            const tableDetectionMode = options.tableDetectionMode || "balanced";
-            const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
-            const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, options);
-            const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
-            const formulaDiagnostics = sheet.cells
+        function createDefaultShapeSvgFilename(shapeIndex) {
+            return `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`;
+        }
+        function createImageSectionEntry(image, index) {
+            return [
+                `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
+                `- File: ${image.path}`,
+                "",
+                `![${image.filename}](${image.path})`
+            ].join("\n");
+        }
+        function createChartSeriesLines(chart) {
+            if (chart.series.length === 0) {
+                return [];
+            }
+            const lines = ["- Series:"];
+            for (const series of chart.series) {
+                lines.push(`  - ${series.name}`);
+                if (series.axis === "secondary")
+                    lines.push("    - Axis: secondary");
+                if (series.categoriesRef)
+                    lines.push(`    - categories: ${series.categoriesRef}`);
+                if (series.valuesRef)
+                    lines.push(`    - values: ${series.valuesRef}`);
+            }
+            return lines;
+        }
+        function createChartSectionEntry(chart, index) {
+            return [
+                `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
+                `- Title: ${chart.title || "(none)"}`,
+                `- Type: ${chart.chartType}`,
+                ...createChartSeriesLines(chart)
+            ].join("\n");
+        }
+        function renderShapeDetails(shape, shapeIndex) {
+            const lines = [
+                `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
+                ...deps.renderHierarchicalRawEntries(shape.rawEntries)
+            ];
+            if (shape.svgPath) {
+                lines.push(`- SVG: ${shape.svgPath}`);
+                lines.push("");
+                lines.push(`![${shape.svgFilename || createDefaultShapeSvgFilename(shapeIndex)}](${shape.svgPath})`);
+            }
+            return lines.join("\n");
+        }
+        function createShapeBlockSummaryLine(shapeIndexes) {
+            return shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ");
+        }
+        function createShapeBlockEntry(block, blockIndex, shapes) {
+            const shapeDetails = block.shapeIndexes
+                .map((shapeIndex) => {
+                const shape = shapes[shapeIndex];
+                if (!shape)
+                    return "";
+                return renderShapeDetails(shape, shapeIndex);
+            })
+                .filter(Boolean)
+                .join("\n\n");
+            return [
+                `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
+                `- Shapes: ${createShapeBlockSummaryLine(block.shapeIndexes)}`,
+                `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
+                ...(shapeDetails ? ["", shapeDetails] : [])
+            ].join("\n");
+        }
+        function collectUngroupedShapes(shapes, shapeBlocks) {
+            const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
+            return shapes
+                .map((shape, index) => ({ shape, index }))
+                .filter(({ index }) => !grouped.has(index));
+        }
+        function renderImageSection(sheet) {
+            return sheet.images.length > 0
+                ? [
+                    "",
+                    ...sheet.images.map((image, index) => createImageSectionEntry(image, index))
+                ].join("\n\n")
+                : "";
+        }
+        function renderChartSection(charts) {
+            return charts.length > 0
+                ? [
+                    "",
+                    ...charts.map((chart, index) => createChartSectionEntry(chart, index))
+                ].join("\n\n")
+                : "";
+        }
+        function renderShapeSection(shapes, shapeBlocks, includeShapeDetails) {
+            const ungrouped = collectUngroupedShapes(shapes, shapeBlocks);
+            return includeShapeDetails && shapes.length > 0
+                ? [
+                    "",
+                    ...shapeBlocks.map((block, blockIndex) => createShapeBlockEntry(block, blockIndex, shapes)),
+                    ...(ungrouped.length === 0
+                        ? []
+                        : [
+                            "",
+                            "### Ungrouped Shapes",
+                            "",
+                            ...ungrouped.map(({ shape, index }) => renderShapeDetails(shape, index))
+                        ])
+                ].join("\n\n")
+                : "";
+        }
+        function createFormulaDiagnostics(sheet) {
+            return sheet.cells
                 .filter((cell) => !!cell.formulaText && cell.resolutionStatus !== null)
                 .map((cell) => ({
                 address: cell.address,
@@ -5878,17 +6112,19 @@ if (!customElements.get("lht-page-menu")) {
                 source: cell.resolutionSource,
                 outputValue: cell.outputValue
             }));
+        }
+        function createNarrativeSections(narrativeBlocks) {
+            return narrativeBlocks.map((block) => ({
+                sortRow: block.startRow,
+                sortCol: block.startCol,
+                markdown: `${deps.renderNarrativeBlock(block)}\n`,
+                kind: "narrative",
+                narrativeBlock: block
+            }));
+        }
+        function createTableSections(workbook, sheet, tables, options, treatFirstRowAsHeader) {
+            var _a;
             const sections = [];
-            for (const block of narrativeBlocks) {
-                sections.push({
-                    sortRow: block.startRow,
-                    sortCol: block.startCol,
-                    markdown: `${deps.renderNarrativeBlock(block)}\n`,
-                    kind: "narrative",
-                    narrativeBlock: block
-                });
-            }
-            const fileName = deps.createOutputFileName(workbook.name, sheet.index, sheet.name, options.outputMode || "display", options.formattingMode || "plain");
             let tableCounter = 1;
             for (const table of tables) {
                 const rows = deps.matrixFromCandidate(sheet, table, options, buildCellMap, (cell, tableOptions) => formatCellForMarkdown(cell, tableOptions, workbook, sheet));
@@ -5903,154 +6139,133 @@ if (!customElements.get("lht-page-menu")) {
                 });
                 tableCounter += 1;
             }
-            sections.sort((left, right) => {
+            return sections;
+        }
+        function sortContentSections(sections) {
+            return sections.sort((left, right) => {
                 if (left.sortRow !== right.sortRow)
                     return left.sortRow - right.sortRow;
                 return left.sortCol - right.sortCol;
             });
-            const groupedSections = (sectionBlocks.length > 0 ? sectionBlocks : [{
-                    startRow: -1,
-                    startCol: -1,
-                    endRow: Number.MAX_SAFE_INTEGER,
-                    endCol: Number.MAX_SAFE_INTEGER
-                }]).map((block) => ({
+        }
+        function createFallbackSectionBlock() {
+            return {
+                startRow: -1,
+                startCol: -1,
+                endRow: Number.MAX_SAFE_INTEGER,
+                endCol: Number.MAX_SAFE_INTEGER
+            };
+        }
+        function isSectionInsideBlock(section, block) {
+            return section.sortRow >= block.startRow
+                && section.sortRow <= block.endRow
+                && section.sortCol >= block.startCol
+                && section.sortCol <= block.endCol;
+        }
+        function createGroupedSections(sectionBlocks, sections) {
+            const blocks = sectionBlocks.length > 0
+                ? sectionBlocks
+                : [createFallbackSectionBlock()];
+            return blocks.map((block) => ({
                 block,
-                entries: sections.filter((section) => section.sortRow >= block.startRow
-                    && section.sortRow <= block.endRow
-                    && section.sortCol >= block.startCol
-                    && section.sortCol <= block.endCol)
+                entries: sections.filter((section) => isSectionInsideBlock(section, block))
             })).filter((group) => group.entries.length > 0);
-            const body = groupedSections
-                .map((group) => group.entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim())
+        }
+        function renderGroupedSectionEntries(entries) {
+            return entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+        }
+        function renderGroupedSectionBody(groupedSections) {
+            return groupedSections
+                .map((group) => renderGroupedSectionEntries(group.entries))
                 .filter(Boolean)
                 .join("\n\n---\n\n")
                 .trim();
-            const imageSection = sheet.images.length > 0
-                ? [
-                    "",
-                    ...sheet.images.map((image, index) => [
-                        `### Image: ${String(index + 1).padStart(3, "0")} (${image.anchor})`,
-                        `- File: ${image.path}`,
-                        "",
-                        `![${image.filename}](${image.path})`
-                    ].join("\n"))
-                ].join("\n\n")
-                : "";
-            const chartSection = charts.length > 0
-                ? [
-                    "",
-                    ...charts.map((chart, index) => {
-                        const lines = [
-                            `### Chart: ${String(index + 1).padStart(3, "0")} (${chart.anchor})`,
-                            `- Title: ${chart.title || "(none)"}`,
-                            `- Type: ${chart.chartType}`
-                        ];
-                        if (chart.series.length > 0) {
-                            lines.push("- Series:");
-                            for (const series of chart.series) {
-                                lines.push(`  - ${series.name}`);
-                                if (series.axis === "secondary")
-                                    lines.push("    - Axis: secondary");
-                                if (series.categoriesRef)
-                                    lines.push(`    - categories: ${series.categoriesRef}`);
-                                if (series.valuesRef)
-                                    lines.push(`    - values: ${series.valuesRef}`);
-                            }
-                        }
-                        return lines.join("\n");
-                    })
-                ].join("\n\n")
-                : "";
-            const includeShapeDetails = options.includeShapeDetails !== false;
-            const shapeSection = includeShapeDetails && shapes.length > 0
-                ? [
-                    "",
-                    ...shapeBlocks.map((block, blockIndex) => {
-                        const shapeDetails = block.shapeIndexes
-                            .map((shapeIndex) => {
-                            const shape = shapes[shapeIndex];
-                            if (!shape)
-                                return "";
-                            const lines = [
-                                `#### Shape: ${String(shapeIndex + 1).padStart(3, "0")} (${shape.anchor})`,
-                                ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                            ];
-                            if (shape.svgPath) {
-                                lines.push(`- SVG: ${shape.svgPath}`);
-                                lines.push("");
-                                lines.push(`![${shape.svgFilename || `shape_${String(shapeIndex + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                            }
-                            return lines.join("\n");
-                        })
-                            .filter(Boolean)
-                            .join("\n\n");
-                        return [
-                            `### Shape Block: ${String(blockIndex + 1).padStart(3, "0")} (${deps.formatRange(block.startRow, block.startCol, block.endRow, block.endCol)})`,
-                            `- Shapes: ${block.shapeIndexes.map((shapeIndex) => `Shape ${String(shapeIndex + 1).padStart(3, "0")}`).join(", ")}`,
-                            `- anchorRange: ${deps.colToLetters(block.startCol)}${block.startRow}-${deps.colToLetters(block.endCol)}${block.endRow}`,
-                            ...(shapeDetails ? ["", shapeDetails] : [])
-                        ].join("\n");
-                    }),
-                    ...(() => {
-                        const grouped = new Set(shapeBlocks.flatMap((block) => block.shapeIndexes));
-                        const ungrouped = shapes
-                            .map((shape, index) => ({ shape, index }))
-                            .filter(({ index }) => !grouped.has(index));
-                        if (ungrouped.length === 0) {
-                            return [];
-                        }
-                        return [
-                            "",
-                            "### Ungrouped Shapes",
-                            "",
-                            ...ungrouped.map(({ shape, index }) => {
-                                const lines = [
-                                    `#### Shape: ${String(index + 1).padStart(3, "0")} (${shape.anchor})`,
-                                    ...deps.renderHierarchicalRawEntries(shape.rawEntries)
-                                ];
-                                if (shape.svgPath) {
-                                    lines.push(`- SVG: ${shape.svgPath}`);
-                                    lines.push("");
-                                    lines.push(`![${shape.svgFilename || `shape_${String(index + 1).padStart(3, "0")}.svg`}](${shape.svgPath})`);
-                                }
-                                return lines.join("\n");
-                            })
-                        ];
-                    })()
-                ].join("\n\n")
-                : "";
+        }
+        function collectSheetRenderState(workbook, sheet, options = {}) {
+            const resolvedOptions = markdownOptions.resolveMarkdownOptions(options);
+            const charts = sheet.charts || [];
+            const shapes = sheet.shapes || [];
+            const shapeBlocks = deps.extractShapeBlocks(shapes, {
+                defaultCellWidthEmu: deps.defaultCellWidthEmu,
+                defaultCellHeightEmu: deps.defaultCellHeightEmu,
+                shapeBlockGapXEmu: deps.shapeBlockGapXEmu,
+                shapeBlockGapYEmu: deps.shapeBlockGapYEmu
+            });
+            const treatFirstRowAsHeader = resolvedOptions.treatFirstRowAsHeader;
+            const tableDetectionMode = resolvedOptions.tableDetectionMode;
+            const tables = deps.detectTableCandidates(sheet, buildCellMap, tableDetectionMode);
+            const narrativeBlocks = extractNarrativeBlocks(workbook, sheet, tables, resolvedOptions);
+            const sectionBlocks = extractSectionBlocks(sheet, tables, narrativeBlocks);
+            const formulaDiagnostics = createFormulaDiagnostics(sheet);
+            const sections = [
+                ...createNarrativeSections(narrativeBlocks),
+                ...createTableSections(workbook, sheet, tables, resolvedOptions, treatFirstRowAsHeader)
+            ];
+            sortContentSections(sections);
+            const groupedSections = createGroupedSections(sectionBlocks, sections);
+            const body = renderGroupedSectionBody(groupedSections);
+            const imageSection = renderImageSection(sheet);
+            const chartSection = renderChartSection(charts);
+            const includeShapeDetails = resolvedOptions.includeShapeDetails;
+            const shapeSection = renderShapeSection(shapes, shapeBlocks, includeShapeDetails);
+            return {
+                resolvedOptions,
+                charts,
+                shapes,
+                shapeBlocks,
+                tables,
+                narrativeBlocks,
+                sectionBlocks,
+                formulaDiagnostics,
+                sections,
+                groupedSections,
+                body,
+                imageSection,
+                chartSection,
+                shapeSection
+            };
+        }
+        function createSheetMarkdownText(workbook, sheet, state) {
             const markdown = [
                 `# Book: ${workbook.name}`,
                 "",
                 `## Sheet: ${sheet.name}`,
                 "",
-                body || "_No extractable body content was found._",
-                chartSection,
-                shapeSection,
-                imageSection
+                state.body || "_No extractable body content was found._",
+                state.chartSection,
+                state.shapeSection,
+                state.imageSection
             ].join("\n");
+            return markdown;
+        }
+        function createSheetSummary(sheet, state) {
+            return {
+                outputMode: state.resolvedOptions.outputMode,
+                formattingMode: state.resolvedOptions.formattingMode,
+                tableDetectionMode: state.resolvedOptions.tableDetectionMode,
+                sections: state.sectionBlocks.length,
+                tables: state.tables.length,
+                narrativeBlocks: state.narrativeBlocks.length,
+                merges: sheet.merges.length,
+                images: sheet.images.length,
+                charts: state.charts.length,
+                cells: sheet.cells.length,
+                tableScores: state.tables.map((table) => ({
+                    range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
+                    score: table.score,
+                    reasons: [...table.reasonSummary]
+                })),
+                formulaDiagnostics: state.formulaDiagnostics
+            };
+        }
+        function convertSheetToMarkdown(workbook, sheet, options = {}) {
+            const state = collectSheetRenderState(workbook, sheet, options);
+            const fileName = deps.createOutputFileName(workbook.name, sheet.index, sheet.name, state.resolvedOptions.outputMode, state.resolvedOptions.formattingMode);
             return {
                 fileName,
                 sheetName: sheet.name,
-                markdown,
-                summary: {
-                    outputMode: options.outputMode || "display",
-                    formattingMode: options.formattingMode || "plain",
-                    tableDetectionMode,
-                    sections: sectionBlocks.length,
-                    tables: tables.length,
-                    narrativeBlocks: narrativeBlocks.length,
-                    merges: sheet.merges.length,
-                    images: sheet.images.length,
-                    charts: charts.length,
-                    cells: sheet.cells.length,
-                    tableScores: tables.map((table) => ({
-                        range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
-                        score: table.score,
-                        reasons: [...table.reasonSummary]
-                    })),
-                    formulaDiagnostics
-                }
+                markdown: createSheetMarkdownText(workbook, sheet, state),
+                summary: createSheetSummary(sheet, state)
             };
         }
         function convertWorkbookToMarkdownFiles(workbook, options = {}) {
@@ -6061,8 +6276,19 @@ if (!customElements.get("lht-page-menu")) {
             formatCellForMarkdown,
             isCellInAnyTable,
             splitNarrativeRowSegments,
+            collectNarrativeCellsByRow,
+            buildNarrativeItems,
             extractNarrativeBlocks,
             extractSectionBlocks,
+            sortContentSections,
+            createGroupedSections,
+            renderGroupedSectionBody,
+            collectSheetRenderState,
+            createSheetMarkdownText,
+            createSheetSummary,
+            renderImageSection,
+            renderChartSection,
+            renderShapeSection,
             convertSheetToMarkdown,
             convertWorkbookToMarkdownFiles
         };
@@ -9598,6 +9824,36 @@ if (!customElements.get("lht-page-menu")) {
  */
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
+    function normalizeCellRect(start, end) {
+        if (!start.row || !start.col || !end.row || !end.col) {
+            return null;
+        }
+        return {
+            startRow: Math.min(start.row, end.row),
+            endRow: Math.max(start.row, end.row),
+            startCol: Math.min(start.col, end.col),
+            endCol: Math.max(start.col, end.col)
+        };
+    }
+    function getResolvedFormulaCellValue(cell) {
+        const rawValue = String(cell.rawValue || "");
+        const outputValue = String(cell.outputValue || "");
+        if (rawValue && rawValue !== cell.formulaText) {
+            return rawValue;
+        }
+        return outputValue || rawValue;
+    }
+    function getUnresolvedFormulaCellValue(cell) {
+        const rawValue = String(cell.rawValue || "");
+        const outputValue = String(cell.outputValue || "");
+        if (rawValue && rawValue !== cell.formulaText) {
+            return rawValue;
+        }
+        if (outputValue && outputValue !== cell.formulaText) {
+            return outputValue;
+        }
+        return "";
+    }
     function buildFormulaResolver(workbook, deps) {
         const sheetMap = new Map();
         const cellMaps = new Map();
@@ -9665,22 +9921,9 @@ if (!customElements.get("lht-page-menu")) {
             }
             if (cell.formulaText) {
                 if (cell.resolutionStatus === "resolved") {
-                    const rawValue = String(cell.rawValue || "");
-                    const outputValue = String(cell.outputValue || "");
-                    if (rawValue && rawValue !== cell.formulaText) {
-                        return rawValue;
-                    }
-                    return outputValue || rawValue;
+                    return getResolvedFormulaCellValue(cell);
                 }
-                const rawValue = String(cell.rawValue || "");
-                const outputValue = String(cell.outputValue || "");
-                if (rawValue && rawValue !== cell.formulaText) {
-                    return rawValue;
-                }
-                if (outputValue && outputValue !== cell.formulaText) {
-                    return outputValue;
-                }
-                return "";
+                return getUnresolvedFormulaCellValue(cell);
             }
             if (["s", "inlineStr", "str", "e", "b"].includes(cell.valueType)) {
                 return String(cell.outputValue || cell.rawValue || "");
@@ -9692,19 +9935,14 @@ if (!customElements.get("lht-page-menu")) {
             if (!range) {
                 return { rawValues: [], numericValues: [] };
             }
-            const start = deps.parseCellAddress(range.start);
-            const end = deps.parseCellAddress(range.end);
-            if (!start.row || !start.col || !end.row || !end.col) {
+            const cellRect = normalizeCellRect(deps.parseCellAddress(range.start), deps.parseCellAddress(range.end));
+            if (!cellRect) {
                 return { rawValues: [], numericValues: [] };
             }
-            const startRow = Math.min(start.row, end.row);
-            const endRow = Math.max(start.row, end.row);
-            const startCol = Math.min(start.col, end.col);
-            const endCol = Math.max(start.col, end.col);
             const rawValues = [];
             const numericValues = [];
-            for (let row = startRow; row <= endRow; row += 1) {
-                for (let col = startCol; col <= endCol; col += 1) {
+            for (let row = cellRect.startRow; row <= cellRect.endRow; row += 1) {
+                for (let col = cellRect.startCol; col <= cellRect.endCol; col += 1) {
                     const rawValue = resolveCellValue(sheetName, `${deps.colToLetters(col)}${row}`);
                     rawValues.push(rawValue);
                     if (String(rawValue || "").trim() === "")
@@ -9751,23 +9989,19 @@ if (!customElements.get("lht-page-menu")) {
             if (args.length < 2 || args.length > 3)
                 return null;
             const rangeRef = deps.parseQualifiedRangeReference(args[0], sheetName);
-            const rowIndex = Number(deps.resolveScalarFormulaValue(args[1], sheetName, resolveCellValue, (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues, resolveRangeEntries));
+            const resolveRangeValues = (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues;
+            const rowIndex = Number(deps.resolveScalarFormulaValue(args[1], sheetName, resolveCellValue, resolveRangeValues, resolveRangeEntries));
             const colIndex = args.length === 3
-                ? Number(deps.resolveScalarFormulaValue(args[2], sheetName, resolveCellValue, (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues, resolveRangeEntries))
+                ? Number(deps.resolveScalarFormulaValue(args[2], sheetName, resolveCellValue, resolveRangeValues, resolveRangeEntries))
                 : 1;
             if (!rangeRef || Number.isNaN(rowIndex) || Number.isNaN(colIndex) || rowIndex < 1 || colIndex < 1)
                 return null;
-            const rangeStart = deps.parseCellAddress(rangeRef.start);
-            const rangeEnd = deps.parseCellAddress(rangeRef.end);
-            if (!rangeStart.row || !rangeStart.col || !rangeEnd.row || !rangeEnd.col)
+            const cellRect = normalizeCellRect(deps.parseCellAddress(rangeRef.start), deps.parseCellAddress(rangeRef.end));
+            if (!cellRect)
                 return null;
-            const startRow = Math.min(rangeStart.row, rangeEnd.row);
-            const endRow = Math.max(rangeStart.row, rangeEnd.row);
-            const startCol = Math.min(rangeStart.col, rangeEnd.col);
-            const endCol = Math.max(rangeStart.col, rangeEnd.col);
-            const targetRow = startRow + Math.trunc(rowIndex) - 1;
-            const targetCol = startCol + Math.trunc(colIndex) - 1;
-            if (targetRow > endRow || targetCol > endCol)
+            const targetRow = cellRect.startRow + Math.trunc(rowIndex) - 1;
+            const targetCol = cellRect.startCol + Math.trunc(colIndex) - 1;
+            if (targetRow > cellRect.endRow || targetCol > cellRect.endCol)
                 return null;
             return {
                 sheetName: startRef.sheetName,
@@ -9789,15 +10023,14 @@ if (!customElements.get("lht-page-menu")) {
             const columnIndex = table.columns.findIndex((columnName) => deps.normalizeStructuredTableKey(columnName) === columnKey);
             if (columnIndex < 0)
                 return null;
-            const startAddress = deps.parseCellAddress(table.start);
-            const endAddress = deps.parseCellAddress(table.end);
-            if (!startAddress.row || !startAddress.col || !endAddress.row || !endAddress.col)
+            const cellRect = normalizeCellRect(deps.parseCellAddress(table.start), deps.parseCellAddress(table.end));
+            if (!cellRect)
                 return null;
-            const firstDataRow = Math.min(startAddress.row, endAddress.row) + Math.max(0, table.headerRowCount);
-            const lastDataRow = Math.max(startAddress.row, endAddress.row) - Math.max(0, table.totalsRowCount);
+            const firstDataRow = cellRect.startRow + Math.max(0, table.headerRowCount);
+            const lastDataRow = cellRect.endRow - Math.max(0, table.totalsRowCount);
             if (firstDataRow > lastDataRow)
                 return null;
-            const col = Math.min(startAddress.col, endAddress.col) + columnIndex;
+            const col = cellRect.startCol + columnIndex;
             const colLetters = deps.colToLetters(col);
             return {
                 sheetName: table.sheetName || sheetName,
@@ -10661,133 +10894,93 @@ if (!customElements.get("lht-page-menu")) {
     }
     function evaluateFunctionCall(name, args, context) {
         const upperName = name.toUpperCase();
-        switch (upperName) {
-            case "IF":
-                return evaluateIf(args, context);
-            case "IFERROR":
-                return evaluateIfError(args, context);
-            case "AND":
-                return evaluateAnd(args, context);
-            case "OR":
-                return evaluateOr(args, context);
-            case "NOT":
-                return evaluateNot(args, context);
-            case "DATE":
-                return evaluateDate(args, context);
-            case "VALUE":
-                return evaluateValue(args, context);
-            case "ROUND":
-                return evaluateRound(args, context, "round");
-            case "ROUNDUP":
-                return evaluateRound(args, context, "up");
-            case "ROUNDDOWN":
-                return evaluateRound(args, context, "down");
-            case "INT":
-                return evaluateInt(args, context);
-            case "ABS":
-                return evaluateAbs(args, context);
-            case "SUM":
-                return evaluateSum(args, context);
-            case "SUMPRODUCT":
-                return evaluateSumProduct(args, context);
-            case "REPT":
-                return evaluateRept(args, context);
-            case "SUBSTITUTE":
-                return evaluateSubstitute(args, context);
-            case "MATCH":
-                return evaluateMatch(args, context);
-            case "INDEX":
-                return evaluateIndex(args, context);
-            case "VLOOKUP":
-                return evaluateVLookup(args, context);
-            case "HLOOKUP":
-                return evaluateHLookup(args, context);
-            case "XLOOKUP":
-                return evaluateXLookup(args, context);
-            case "TEXT":
-                return evaluateText(args, context);
-            case "TODAY":
-                return evaluateToday(context);
-            case "WEEKDAY":
-                return evaluateWeekday(args, context);
-            case "DATEVALUE":
-                return evaluateDateValue(args, context);
-            case "LEN":
-                return evaluateLen(args, context);
-            case "LOWER":
-                return evaluateLower(args, context);
-            case "FIND":
-                return evaluateFind(args, context, false);
-            case "SEARCH":
-                return evaluateFind(args, context, true);
-            case "LEFT":
-                return evaluateLeft(args, context);
-            case "RIGHT":
-                return evaluateRight(args, context);
-            case "MID":
-                return evaluateMid(args, context);
-            case "TRIM":
-                return evaluateTrim(args, context);
-            case "REPLACE":
-                return evaluateReplace(args, context);
-            case "DAY":
-                return evaluateDay(args, context);
-            case "MONTH":
-                return evaluateMonth(args, context);
-            case "YEAR":
-                return evaluateYear(args, context);
-            case "SUBTOTAL":
-                return evaluateSubtotal(args, context);
-            case "UPPER":
-                return evaluateUpper(args, context);
-            case "CONCATENATE":
-                return evaluateConcatenate(args, context);
-            case "ISBLANK":
-                return evaluateIsBlank(args, context);
-            case "ISNUMBER":
-                return evaluateIsNumber(args, context);
-            case "ISTEXT":
-                return evaluateIsText(args, context);
-            case "ISERROR":
-                return evaluateIsError(args, context);
-            case "ISNA":
-                return evaluateIsNa(args, context);
-            case "NA":
-                return evaluateNa();
-            case "MIN":
-                return evaluateMin(args, context);
-            case "MAX":
-                return evaluateMax(args, context);
-            case "AVERAGE":
-                return evaluateAverage(args, context);
-            case "COLUMN":
-                return evaluateColumn(args, context);
-            case "ROW":
-                return evaluateRow(args, context);
-            case "EDATE":
-                return evaluateEDate(args, context);
-            case "EOMONTH":
-                return evaluateEoMonth(args, context);
-            case "COUNTIF":
-                return evaluateCountIf(args, context);
-            case "COUNTIFS":
-                return evaluateCountIfs(args, context);
-            case "COUNT":
-                return evaluateCount(args, context);
-            case "COUNTA":
-                return evaluateCountA(args, context);
-            case "SUMIF":
-                return evaluateSumIf(args, context);
-            case "SUMIFS":
-                return evaluateSumIfs(args, context);
-            case "AVERAGEIF":
-                return evaluateAverageIf(args, context);
-            case "AVERAGEIFS":
-                return evaluateAverageIfs(args, context);
-            default:
-                throw new Error(`Unsupported formula function: ${name}`);
+        const evaluator = FORMULA_FUNCTION_EVALUATORS[upperName];
+        if (!evaluator) {
+            throw new Error(`Unsupported formula function: ${name}`);
         }
+        return evaluator(args, context);
     }
+    const LOGICAL_FUNCTION_EVALUATORS = {
+        IF: evaluateIf,
+        IFERROR: evaluateIfError,
+        AND: evaluateAnd,
+        OR: evaluateOr,
+        NOT: evaluateNot
+    };
+    const NUMERIC_FUNCTION_EVALUATORS = {
+        ABS: evaluateAbs,
+        INT: evaluateInt,
+        ROUND: (args, context) => evaluateRound(args, context, "round"),
+        ROUNDUP: (args, context) => evaluateRound(args, context, "up"),
+        ROUNDDOWN: (args, context) => evaluateRound(args, context, "down"),
+        SUM: evaluateSum,
+        SUMPRODUCT: evaluateSumProduct,
+        MIN: evaluateMin,
+        MAX: evaluateMax,
+        AVERAGE: evaluateAverage,
+        COUNT: evaluateCount,
+        COUNTA: evaluateCountA,
+        COUNTIF: evaluateCountIf,
+        COUNTIFS: evaluateCountIfs,
+        SUMIF: evaluateSumIf,
+        SUMIFS: evaluateSumIfs,
+        AVERAGEIF: evaluateAverageIf,
+        AVERAGEIFS: evaluateAverageIfs,
+        SUBTOTAL: evaluateSubtotal
+    };
+    const DATE_FUNCTION_EVALUATORS = {
+        DATE: evaluateDate,
+        DATEVALUE: evaluateDateValue,
+        TODAY: (_args, context) => evaluateToday(context),
+        WEEKDAY: evaluateWeekday,
+        DAY: evaluateDay,
+        MONTH: evaluateMonth,
+        YEAR: evaluateYear,
+        EDATE: evaluateEDate,
+        EOMONTH: evaluateEoMonth
+    };
+    const TEXT_FUNCTION_EVALUATORS = {
+        VALUE: evaluateValue,
+        REPT: evaluateRept,
+        SUBSTITUTE: evaluateSubstitute,
+        TEXT: evaluateText,
+        LEN: evaluateLen,
+        LOWER: evaluateLower,
+        UPPER: evaluateUpper,
+        FIND: (args, context) => evaluateFind(args, context, false),
+        SEARCH: (args, context) => evaluateFind(args, context, true),
+        LEFT: evaluateLeft,
+        RIGHT: evaluateRight,
+        MID: evaluateMid,
+        TRIM: evaluateTrim,
+        REPLACE: evaluateReplace,
+        CONCATENATE: evaluateConcatenate
+    };
+    const LOOKUP_FUNCTION_EVALUATORS = {
+        MATCH: evaluateMatch,
+        INDEX: evaluateIndex,
+        VLOOKUP: evaluateVLookup,
+        HLOOKUP: evaluateHLookup,
+        XLOOKUP: evaluateXLookup,
+        COLUMN: evaluateColumn,
+        ROW: evaluateRow
+    };
+    const INFORMATION_FUNCTION_EVALUATORS = {
+        ISBLANK: evaluateIsBlank,
+        ISNUMBER: evaluateIsNumber,
+        ISTEXT: evaluateIsText,
+        ISERROR: evaluateIsError,
+        ISNA: evaluateIsNa,
+        NA: () => evaluateNa()
+    };
+    const FORMULA_FUNCTION_EVALUATORS = {
+        ...LOGICAL_FUNCTION_EVALUATORS,
+        ...NUMERIC_FUNCTION_EVALUATORS,
+        ...DATE_FUNCTION_EVALUATORS,
+        ...TEXT_FUNCTION_EVALUATORS,
+        ...LOOKUP_FUNCTION_EVALUATORS,
+        ...INFORMATION_FUNCTION_EVALUATORS
+    };
     function evaluateIf(args, context) {
         const condition = toBoolean(evaluateFormulaAst(args[0], context));
         if (condition) {
@@ -11751,6 +11944,7 @@ if (!customElements.get("lht-page-menu")) {
     const worksheetParserHelper = requireCoreWorksheetParser();
     const workbookLoaderHelper = requireCoreWorkbookLoader();
     const formulaResolverHelper = requireCoreFormulaResolver();
+    const markdownOptionsHelper = requireXlsx2mdMarkdownOptions();
     const formulaLegacyModule = requireXlsx2mdFormulaLegacyModule();
     const formulaAstModule = requireXlsx2mdFormulaAstModule();
     const zipIoHelper = moduleRegistry.requireModule("zipIo", "xlsx2md zip io module is not loaded");
@@ -11823,6 +12017,29 @@ if (!customElements.get("lht-page-menu")) {
     function resolveSpillRange(_sheetName, _ref) {
         return null;
     }
+    function setDefinedNameResolvers(scalar, range, structured) {
+        resolveDefinedNameScalarValue = scalar;
+        resolveDefinedNameRangeRef = range;
+        resolveStructuredRangeRef = structured;
+    }
+    function buildDrawingAssetDeps() {
+        return {
+            parseRelationships,
+            buildRelsPath,
+            xmlToDocument,
+            decodeXmlText,
+            getElementsByLocalName,
+            getFirstChildByLocalName,
+            getDirectChildByLocalName,
+            getTextContent,
+            colToLetters,
+            drawingHelper,
+            defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
+            defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
+            shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
+            shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
+        };
+    }
     function createWorksheetParseDeps() {
         return {
             EMPTY_BORDERS,
@@ -11838,22 +12055,7 @@ if (!customElements.get("lht-page-menu")) {
             parseRelationshipEntries,
             buildRelsPath,
             formatCellDisplayValue: cellFormatHelper.formatCellDisplayValue,
-            buildAssetDeps: () => ({
-                parseRelationships,
-                buildRelsPath,
-                xmlToDocument,
-                decodeXmlText,
-                getElementsByLocalName,
-                getFirstChildByLocalName,
-                getDirectChildByLocalName,
-                getTextContent,
-                colToLetters,
-                drawingHelper,
-                defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
-                defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
-                shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
-                shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
-            }),
+            buildAssetDeps: buildDrawingAssetDeps,
             lettersToCol,
             colToLetters
         };
@@ -11875,11 +12077,7 @@ if (!customElements.get("lht-page-menu")) {
             parseRangeAddress,
             tryResolveFormulaExpressionDetailed,
             applyResolvedFormulaValue: cellFormatHelper.applyResolvedFormulaValue,
-            setDefinedNameResolvers: (scalar, range, structured) => {
-                resolveDefinedNameScalarValue = scalar;
-                resolveDefinedNameRangeRef = range;
-                resolveStructuredRangeRef = structured;
-            }
+            setDefinedNameResolvers
         };
     }
     async function parseWorkbook(arrayBuffer, workbookName = "workbook.xlsx", options = {}) {
@@ -11908,7 +12106,8 @@ if (!customElements.get("lht-page-menu")) {
         unzipEntries: zipIoHelper.unzipEntries,
         parseRangeRef,
         applyMergeTokens: tableDetectorHelper.applyMergeTokens,
-        detectTableCandidates: (sheet, tableDetectionMode = "balanced") => tableDetectorHelper.detectTableCandidates(sheet, buildCellMap, undefined, tableDetectionMode),
+        detectTableCandidates: (sheet, tableDetectionMode = "balanced") => tableDetectorHelper.detectTableCandidates(sheet, buildCellMap, undefined, markdownOptionsHelper.normalizeTableDetectionMode(tableDetectionMode)),
+        markdownOptions: markdownOptionsHelper,
         extractNarrativeBlocks,
         convertSheetToMarkdown,
         convertWorkbookToMarkdownFiles,
@@ -11933,8 +12132,15 @@ if (!customElements.get("lht-page-menu")) {
  * SPDX-License-Identifier: Apache-2.0
  */
 (() => {
+    const EMPTY_SUMMARY_HTML = '<div class="md-summary-empty">No conversion yet.</div>';
+    const EMPTY_TABLE_SCORE_HTML = '<div class="md-summary-empty">No table candidates found.</div>';
+    const EMPTY_FORMULA_HTML = '<div class="md-summary-empty">No formula cells found.</div>';
+    const TABLE_SCORE_LABELS = ["strong", "candidate", "unknown"];
+    const FORMULA_STATUS_LABELS = ["resolved", "fallback", "unsupported", "unknown"];
+    const FORMULA_SOURCE_LABELS = ["cached", "ast", "legacy", "formula", "external", "unknown"];
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const textEncoding = requireXlsx2mdTextEncoding();
+    const markdownOptions = requireXlsx2mdMarkdownOptions();
     const xlsx2md = moduleRegistry.getModule("xlsx2md");
     if (!xlsx2md) {
         throw new Error("xlsx2md core module is not loaded");
@@ -11967,19 +12173,16 @@ if (!customElements.get("lht-page-menu")) {
         return textEncoding.isEncodingAvailable(encoding);
     }
     function getOptions() {
-        const outputMode = getSelectValue("outputModeSelect", "display");
-        const formattingMode = getSelectValue("formattingModeSelect", "plain");
-        const tableDetectionMode = getSelectValue("tableDetectionModeSelect", "balanced");
-        return {
+        return markdownOptions.resolveMarkdownOptions({
             treatFirstRowAsHeader: getSwitchValue("headerRowEnabled"),
             trimText: getSwitchValue("trimTextEnabled"),
             removeEmptyRows: getSwitchValue("removeEmptyRowsEnabled"),
             removeEmptyColumns: getSwitchValue("removeEmptyColumnsEnabled"),
             includeShapeDetails: getSwitchValue("includeShapeDetailsEnabled"),
-            outputMode: outputMode === "raw" || outputMode === "both" ? outputMode : "display",
-            formattingMode: formattingMode === "github" ? "github" : "plain",
-            tableDetectionMode: tableDetectionMode === "border-priority" || tableDetectionMode === "border" ? "border" : "balanced"
-        };
+            outputMode: getSelectValue("outputModeSelect", "display"),
+            formattingMode: getSelectValue("formattingModeSelect", "plain"),
+            tableDetectionMode: getSelectValue("tableDetectionModeSelect", "balanced")
+        });
     }
     function getEncodingOptions() {
         const encoding = getSelectValue("encodingSelect", "utf-8");
@@ -12022,15 +12225,38 @@ if (!customElements.get("lht-page-menu")) {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
     }
+    function countByLabel(items, getLabel, labels) {
+        const counts = Object.fromEntries(labels.map((label) => [label, 0]));
+        items.forEach((item) => {
+            counts[getLabel(item)] += 1;
+        });
+        return counts;
+    }
+    function formatNonZeroCounts(counts, labels) {
+        return labels
+            .filter((label) => counts[label] > 0)
+            .map((label) => `${label} ${counts[label]}`)
+            .join(" / ");
+    }
+    function sumFileMetric(files, getValue) {
+        return files.reduce((sum, file) => sum + getValue(file), 0);
+    }
+    function resetRenderedWorkbookState(summaryMessage) {
+        setSummaryText(summaryMessage);
+        setScoreSummaryHtml(EMPTY_SUMMARY_HTML);
+        setFormulaSummaryHtml(EMPTY_SUMMARY_HTML);
+        setPreviewMarkdown("");
+        getElement("downloadBtn").disabled = true;
+        getElement("exportZipBtn").disabled = true;
+    }
     function renderScoreSummary(files) {
         const sheetsWithScores = files.filter((file) => file.summary.tableScores.length > 0);
         if (sheetsWithScores.length === 0) {
-            return '<div class="md-summary-empty">No table candidates found.</div>';
+            return EMPTY_TABLE_SCORE_HTML;
         }
-        const totalScores = sheetsWithScores.reduce((sum, file) => sum + file.summary.tableScores.length, 0);
-        const totalStrong = sheetsWithScores.reduce((sum, file) => (sum + file.summary.tableScores.filter((detail) => getTableScoreLabel(detail.score) === "strong").length), 0);
-        const totalCandidate = sheetsWithScores.reduce((sum, file) => (sum + file.summary.tableScores.filter((detail) => getTableScoreLabel(detail.score) === "candidate").length), 0);
-        return `<div class="md-summary-overview">Total ${totalScores} / strong ${totalStrong} / candidate ${totalCandidate}</div>${sheetsWithScores.map((file) => {
+        const allScores = sheetsWithScores.flatMap((file) => file.summary.tableScores);
+        const totalCounts = countByLabel(allScores, (detail) => getTableScoreLabel(detail.score), TABLE_SCORE_LABELS);
+        return `<div class="md-summary-overview">Total ${allScores.length} / strong ${totalCounts.strong} / candidate ${totalCounts.candidate}</div>${sheetsWithScores.map((file) => {
             const items = [...file.summary.tableScores].sort((left, right) => {
                 if (right.score !== left.score) {
                     return right.score - left.score;
@@ -12055,19 +12281,7 @@ if (!customElements.get("lht-page-menu")) {
         return "unknown";
     }
     function renderTableScoreCounts(file) {
-        const counts = {
-            strong: 0,
-            candidate: 0,
-            unknown: 0
-        };
-        file.summary.tableScores.forEach((detail) => {
-            counts[getTableScoreLabel(detail.score)] += 1;
-        });
-        return [
-            counts.strong > 0 ? `strong ${counts.strong}` : "",
-            counts.candidate > 0 ? `candidate ${counts.candidate}` : "",
-            counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-        ].filter(Boolean).join(" / ");
+        return formatNonZeroCounts(countByLabel(file.summary.tableScores, (detail) => getTableScoreLabel(detail.score), TABLE_SCORE_LABELS), TABLE_SCORE_LABELS);
     }
     function getFormulaStatusLabel(status) {
         if (status === "resolved")
@@ -12079,21 +12293,7 @@ if (!customElements.get("lht-page-menu")) {
         return "unknown";
     }
     function renderFormulaStatusCounts(file) {
-        const counts = {
-            resolved: 0,
-            fallback: 0,
-            unsupported: 0,
-            unknown: 0
-        };
-        file.summary.formulaDiagnostics.forEach((diagnostic) => {
-            counts[getFormulaStatusLabel(diagnostic.status)] += 1;
-        });
-        return [
-            counts.resolved > 0 ? `resolved ${counts.resolved}` : "",
-            counts.fallback > 0 ? `fallback ${counts.fallback}` : "",
-            counts.unsupported > 0 ? `unsupported ${counts.unsupported}` : "",
-            counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-        ].filter(Boolean).join(" / ");
+        return formatNonZeroCounts(countByLabel(file.summary.formulaDiagnostics, (diagnostic) => getFormulaStatusLabel(diagnostic.status), FORMULA_STATUS_LABELS), FORMULA_STATUS_LABELS);
     }
     function getFormulaStatusPriority(status) {
         const label = getFormulaStatusLabel(status);
@@ -12119,40 +12319,17 @@ if (!customElements.get("lht-page-menu")) {
         return "unknown";
     }
     function renderFormulaSourceCounts(file) {
-        const counts = {
-            cached: 0,
-            ast: 0,
-            legacy: 0,
-            formula: 0,
-            external: 0,
-            unknown: 0
-        };
-        file.summary.formulaDiagnostics.forEach((diagnostic) => {
-            counts[getFormulaSourceLabel(diagnostic.source)] += 1;
-        });
-        return [
-            counts.cached > 0 ? `cached ${counts.cached}` : "",
-            counts.ast > 0 ? `ast ${counts.ast}` : "",
-            counts.legacy > 0 ? `legacy ${counts.legacy}` : "",
-            counts.formula > 0 ? `formula ${counts.formula}` : "",
-            counts.external > 0 ? `external ${counts.external}` : "",
-            counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-        ].filter(Boolean).join(" / ");
+        return formatNonZeroCounts(countByLabel(file.summary.formulaDiagnostics, (diagnostic) => getFormulaSourceLabel(diagnostic.source), FORMULA_SOURCE_LABELS), FORMULA_SOURCE_LABELS);
     }
     function renderFormulaSummary(files) {
         const sheetsWithDiagnostics = files.filter((file) => file.summary.formulaDiagnostics.length > 0);
         if (sheetsWithDiagnostics.length === 0) {
-            return '<div class="md-summary-empty">No formula cells found.</div>';
+            return EMPTY_FORMULA_HTML;
         }
-        const totalDiagnostics = sheetsWithDiagnostics.reduce((sum, file) => sum + file.summary.formulaDiagnostics.length, 0);
-        const totalResolved = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "resolved").length), 0);
-        const totalFallback = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "fallback").length), 0);
-        const totalUnsupported = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "unsupported").length), 0);
-        const totalCached = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "cached_value").length), 0);
-        const totalAst = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "ast_evaluator").length), 0);
-        const totalLegacy = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "legacy_resolver").length), 0);
-        const totalFormula = sheetsWithDiagnostics.reduce((sum, file) => (sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "formula_text").length), 0);
-        return `<div class="md-summary-overview">Total ${totalDiagnostics} / cached ${totalCached} / ast ${totalAst} / legacy ${totalLegacy} / formula ${totalFormula} / resolved ${totalResolved} / fallback ${totalFallback} / unsupported ${totalUnsupported}</div>${sheetsWithDiagnostics.map((file) => {
+        const diagnostics = sheetsWithDiagnostics.flatMap((file) => file.summary.formulaDiagnostics);
+        const totalStatuses = countByLabel(diagnostics, (diagnostic) => getFormulaStatusLabel(diagnostic.status), FORMULA_STATUS_LABELS);
+        const totalSources = countByLabel(diagnostics, (diagnostic) => getFormulaSourceLabel(diagnostic.source), FORMULA_SOURCE_LABELS);
+        return `<div class="md-summary-overview">Total ${diagnostics.length} / cached ${totalSources.cached} / ast ${totalSources.ast} / legacy ${totalSources.legacy} / formula ${totalSources.formula} / resolved ${totalStatuses.resolved} / fallback ${totalStatuses.fallback} / unsupported ${totalStatuses.unsupported}</div>${sheetsWithDiagnostics.map((file) => {
             const items = [...file.summary.formulaDiagnostics].sort((left, right) => {
                 const priorityDiff = getFormulaStatusPriority(left.status) - getFormulaStatusPriority(right.status);
                 if (priorityDiff !== 0) {
@@ -12166,14 +12343,14 @@ if (!customElements.get("lht-page-menu")) {
     function renderAnalysisSummary(files, workbookName) {
         var _a, _b, _c;
         if (files.length === 0) {
-            return '<div class="md-summary-empty">No conversion yet.</div>';
+            return EMPTY_SUMMARY_HTML;
         }
-        const totalTables = files.reduce((sum, file) => sum + file.summary.tables, 0);
-        const totalNarratives = files.reduce((sum, file) => sum + file.summary.narrativeBlocks, 0);
-        const totalMerges = files.reduce((sum, file) => sum + file.summary.merges, 0);
-        const totalImages = files.reduce((sum, file) => sum + file.summary.images, 0);
-        const totalCells = files.reduce((sum, file) => sum + file.summary.cells, 0);
-        const totalFormulas = files.reduce((sum, file) => sum + file.summary.formulaDiagnostics.length, 0);
+        const totalTables = sumFileMetric(files, (file) => file.summary.tables);
+        const totalNarratives = sumFileMetric(files, (file) => file.summary.narrativeBlocks);
+        const totalMerges = sumFileMetric(files, (file) => file.summary.merges);
+        const totalImages = sumFileMetric(files, (file) => file.summary.images);
+        const totalCells = sumFileMetric(files, (file) => file.summary.cells);
+        const totalFormulas = sumFileMetric(files, (file) => file.summary.formulaDiagnostics.length);
         const outputMode = ((_a = files[0]) === null || _a === void 0 ? void 0 : _a.summary.outputMode) || "display";
         const formattingMode = ((_b = files[0]) === null || _b === void 0 ? void 0 : _b.summary.formattingMode) || "plain";
         const tableDetectionMode = ((_c = files[0]) === null || _c === void 0 ? void 0 : _c.summary.tableDetectionMode) || "balanced";
@@ -12326,10 +12503,7 @@ if (!customElements.get("lht-page-menu")) {
     function renderCurrentSelection() {
         var _a;
         if (!currentFiles.length) {
-            setSummaryText("No conversion yet.");
-            setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-            setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-            setPreviewMarkdown("");
+            resetRenderedWorkbookState("No conversion yet.");
             updatePreviewModeBanner(getSelectedOutputMode());
             return;
         }
@@ -12462,12 +12636,7 @@ if (!customElements.get("lht-page-menu")) {
             currentWorkbookBytes = null;
             currentWorkbookName = "";
             currentParsedIncludeShapeDetails = null;
-            setSummaryText("Failed to load the workbook.");
-            setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-            setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-            setPreviewMarkdown("");
-            getElement("downloadBtn").disabled = true;
-            getElement("exportZipBtn").disabled = true;
+            resetRenderedWorkbookState("Failed to load the workbook.");
             showError(error instanceof Error ? error.message : "Failed to load the xlsx file.");
         }
         finally {
@@ -12516,17 +12685,12 @@ if (!customElements.get("lht-page-menu")) {
     }
     function initialize() {
         clearError();
-        setSummaryText("No conversion yet.");
-        setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-        setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-        setPreviewMarkdown("");
+        resetRenderedWorkbookState("No conversion yet.");
         updateOutputModeNotice(getSelectedOutputMode());
         updateFormattingModeNotice(getOptions().formattingMode);
         updateTableDetectionModeNotice(getOptions().tableDetectionMode);
         syncEncodingControls();
         updatePreviewModeBanner(getSelectedOutputMode());
-        getElement("downloadBtn").disabled = true;
-        getElement("exportZipBtn").disabled = true;
         bindFileInput();
         bindActions();
     }

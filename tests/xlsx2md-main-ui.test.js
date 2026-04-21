@@ -1,23 +1,14 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { loadJsModules } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const mainCode = readFileSync(
-  path.resolve(__dirname, "../src/js/main.js"),
-  "utf8"
-);
-const textEncodingCode = readFileSync(
-  path.resolve(__dirname, "../src/js/text-encoding.js"),
-  "utf8"
-);
 
 function createDomFixture() {
   document.body.innerHTML = `
@@ -146,7 +137,10 @@ function bootMain(overrides = {}, options = {}) {
   if (options.disableNodeRequire) {
     delete globalThis.__xlsx2mdNodeRequire;
   }
-  new Function(textEncodingCode)();
+  loadJsModules(__dirname, [
+    "src/js/text-encoding.js",
+    "src/js/markdown-options.js"
+  ]);
   const api = {
     parseWorkbook: vi.fn(async () => ({ name: "book.xlsx", sheets: [{ name: "Sheet1", index: 1 }] })),
     convertWorkbookToMarkdownFiles: vi.fn(() => [createWorkbookFile()]),
@@ -157,7 +151,7 @@ function bootMain(overrides = {}, options = {}) {
     ...overrides
   };
   registry.registerModule("xlsx2md", api);
-  new Function(mainCode)();
+  loadJsModules(__dirname, ["src/js/main.js"]);
   document.dispatchEvent(new Event("DOMContentLoaded"));
   return api;
 }

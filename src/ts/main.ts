@@ -57,8 +57,16 @@
     includeShapeDetails?: boolean;
   };
 
+  const EMPTY_SUMMARY_HTML = '<div class="md-summary-empty">No conversion yet.</div>';
+  const EMPTY_TABLE_SCORE_HTML = '<div class="md-summary-empty">No table candidates found.</div>';
+  const EMPTY_FORMULA_HTML = '<div class="md-summary-empty">No formula cells found.</div>';
+  const TABLE_SCORE_LABELS = ["strong", "candidate", "unknown"] as const;
+  const FORMULA_STATUS_LABELS = ["resolved", "fallback", "unsupported", "unknown"] as const;
+  const FORMULA_SOURCE_LABELS = ["cached", "ast", "legacy", "formula", "external", "unknown"] as const;
+
   const moduleRegistry = getXlsx2mdModuleRegistry();
   const textEncoding = requireXlsx2mdTextEncoding();
+  const markdownOptions = requireXlsx2mdMarkdownOptions();
   const xlsx2md = moduleRegistry.getModule<{
     parseWorkbook: (
       arrayBuffer: ArrayBuffer,
@@ -117,19 +125,16 @@
   }
 
   function getOptions(): MarkdownOptions {
-    const outputMode = getSelectValue("outputModeSelect", "display");
-    const formattingMode = getSelectValue("formattingModeSelect", "plain");
-    const tableDetectionMode = getSelectValue("tableDetectionModeSelect", "balanced");
-    return {
+    return markdownOptions.resolveMarkdownOptions({
       treatFirstRowAsHeader: getSwitchValue("headerRowEnabled"),
       trimText: getSwitchValue("trimTextEnabled"),
       removeEmptyRows: getSwitchValue("removeEmptyRowsEnabled"),
       removeEmptyColumns: getSwitchValue("removeEmptyColumnsEnabled"),
       includeShapeDetails: getSwitchValue("includeShapeDetailsEnabled"),
-      outputMode: outputMode === "raw" || outputMode === "both" ? outputMode : "display",
-      formattingMode: formattingMode === "github" ? "github" : "plain",
-      tableDetectionMode: tableDetectionMode === "border-priority" || tableDetectionMode === "border" ? "border" : "balanced"
-    };
+      outputMode: getSelectValue("outputModeSelect", "display"),
+      formattingMode: getSelectValue("formattingModeSelect", "plain"),
+      tableDetectionMode: getSelectValue("tableDetectionModeSelect", "balanced")
+    });
   }
 
   function getEncodingOptions(): MarkdownEncodingOptions {
@@ -183,19 +188,46 @@
       .replace(/'/g, "&#39;");
   }
 
+  function countByLabel<T, Label extends string>(
+    items: T[],
+    getLabel: (item: T) => Label,
+    labels: readonly Label[]
+  ): Record<Label, number> {
+    const counts = Object.fromEntries(labels.map((label) => [label, 0])) as Record<Label, number>;
+    items.forEach((item) => {
+      counts[getLabel(item)] += 1;
+    });
+    return counts;
+  }
+
+  function formatNonZeroCounts<Label extends string>(counts: Record<Label, number>, labels: readonly Label[]): string {
+    return labels
+      .filter((label) => counts[label] > 0)
+      .map((label) => `${label} ${counts[label]}`)
+      .join(" / ");
+  }
+
+  function sumFileMetric(files: WorkbookFile[], getValue: (file: WorkbookFile) => number): number {
+    return files.reduce((sum, file) => sum + getValue(file), 0);
+  }
+
+  function resetRenderedWorkbookState(summaryMessage: string): void {
+    setSummaryText(summaryMessage);
+    setScoreSummaryHtml(EMPTY_SUMMARY_HTML);
+    setFormulaSummaryHtml(EMPTY_SUMMARY_HTML);
+    setPreviewMarkdown("");
+    getElement<HTMLButtonElement>("downloadBtn").disabled = true;
+    getElement<HTMLButtonElement>("exportZipBtn").disabled = true;
+  }
+
   function renderScoreSummary(files: WorkbookFile[]): string {
     const sheetsWithScores = files.filter((file) => file.summary.tableScores.length > 0);
     if (sheetsWithScores.length === 0) {
-      return '<div class="md-summary-empty">No table candidates found.</div>';
+      return EMPTY_TABLE_SCORE_HTML;
     }
-    const totalScores = sheetsWithScores.reduce((sum, file) => sum + file.summary.tableScores.length, 0);
-    const totalStrong = sheetsWithScores.reduce((sum, file) => (
-      sum + file.summary.tableScores.filter((detail) => getTableScoreLabel(detail.score) === "strong").length
-    ), 0);
-    const totalCandidate = sheetsWithScores.reduce((sum, file) => (
-      sum + file.summary.tableScores.filter((detail) => getTableScoreLabel(detail.score) === "candidate").length
-    ), 0);
-    return `<div class="md-summary-overview">Total ${totalScores} / strong ${totalStrong} / candidate ${totalCandidate}</div>${sheetsWithScores.map((file) => {
+    const allScores = sheetsWithScores.flatMap((file) => file.summary.tableScores);
+    const totalCounts = countByLabel(allScores, (detail) => getTableScoreLabel(detail.score), TABLE_SCORE_LABELS);
+    return `<div class="md-summary-overview">Total ${allScores.length} / strong ${totalCounts.strong} / candidate ${totalCounts.candidate}</div>${sheetsWithScores.map((file) => {
       const items = [...file.summary.tableScores].sort((left, right) => {
         if (right.score !== left.score) {
           return right.score - left.score;
@@ -221,19 +253,10 @@
   }
 
   function renderTableScoreCounts(file: WorkbookFile): string {
-    const counts = {
-      strong: 0,
-      candidate: 0,
-      unknown: 0
-    };
-    file.summary.tableScores.forEach((detail) => {
-      counts[getTableScoreLabel(detail.score) as keyof typeof counts] += 1;
-    });
-    return [
-      counts.strong > 0 ? `strong ${counts.strong}` : "",
-      counts.candidate > 0 ? `candidate ${counts.candidate}` : "",
-      counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-    ].filter(Boolean).join(" / ");
+    return formatNonZeroCounts(
+      countByLabel(file.summary.tableScores, (detail) => getTableScoreLabel(detail.score), TABLE_SCORE_LABELS),
+      TABLE_SCORE_LABELS
+    );
   }
 
   function getFormulaStatusLabel(status: "resolved" | "fallback_formula" | "unsupported_external" | null): string {
@@ -244,21 +267,10 @@
   }
 
   function renderFormulaStatusCounts(file: WorkbookFile): string {
-    const counts = {
-      resolved: 0,
-      fallback: 0,
-      unsupported: 0,
-      unknown: 0
-    };
-    file.summary.formulaDiagnostics.forEach((diagnostic) => {
-      counts[getFormulaStatusLabel(diagnostic.status) as keyof typeof counts] += 1;
-    });
-    return [
-      counts.resolved > 0 ? `resolved ${counts.resolved}` : "",
-      counts.fallback > 0 ? `fallback ${counts.fallback}` : "",
-      counts.unsupported > 0 ? `unsupported ${counts.unsupported}` : "",
-      counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-    ].filter(Boolean).join(" / ");
+    return formatNonZeroCounts(
+      countByLabel(file.summary.formulaDiagnostics, (diagnostic) => getFormulaStatusLabel(diagnostic.status), FORMULA_STATUS_LABELS),
+      FORMULA_STATUS_LABELS
+    );
   }
 
   function getFormulaStatusPriority(status: "resolved" | "fallback_formula" | "unsupported_external" | null): number {
@@ -279,55 +291,21 @@
   }
 
   function renderFormulaSourceCounts(file: WorkbookFile): string {
-    const counts = {
-      cached: 0,
-      ast: 0,
-      legacy: 0,
-      formula: 0,
-      external: 0,
-      unknown: 0
-    };
-    file.summary.formulaDiagnostics.forEach((diagnostic) => {
-      counts[getFormulaSourceLabel(diagnostic.source) as keyof typeof counts] += 1;
-    });
-    return [
-      counts.cached > 0 ? `cached ${counts.cached}` : "",
-      counts.ast > 0 ? `ast ${counts.ast}` : "",
-      counts.legacy > 0 ? `legacy ${counts.legacy}` : "",
-      counts.formula > 0 ? `formula ${counts.formula}` : "",
-      counts.external > 0 ? `external ${counts.external}` : "",
-      counts.unknown > 0 ? `unknown ${counts.unknown}` : ""
-    ].filter(Boolean).join(" / ");
+    return formatNonZeroCounts(
+      countByLabel(file.summary.formulaDiagnostics, (diagnostic) => getFormulaSourceLabel(diagnostic.source), FORMULA_SOURCE_LABELS),
+      FORMULA_SOURCE_LABELS
+    );
   }
 
   function renderFormulaSummary(files: WorkbookFile[]): string {
     const sheetsWithDiagnostics = files.filter((file) => file.summary.formulaDiagnostics.length > 0);
     if (sheetsWithDiagnostics.length === 0) {
-      return '<div class="md-summary-empty">No formula cells found.</div>';
+      return EMPTY_FORMULA_HTML;
     }
-    const totalDiagnostics = sheetsWithDiagnostics.reduce((sum, file) => sum + file.summary.formulaDiagnostics.length, 0);
-    const totalResolved = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "resolved").length
-    ), 0);
-    const totalFallback = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "fallback").length
-    ), 0);
-    const totalUnsupported = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => getFormulaStatusLabel(diagnostic.status) === "unsupported").length
-    ), 0);
-    const totalCached = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "cached_value").length
-    ), 0);
-    const totalAst = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "ast_evaluator").length
-    ), 0);
-    const totalLegacy = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "legacy_resolver").length
-    ), 0);
-    const totalFormula = sheetsWithDiagnostics.reduce((sum, file) => (
-      sum + file.summary.formulaDiagnostics.filter((diagnostic) => diagnostic.source === "formula_text").length
-    ), 0);
-    return `<div class="md-summary-overview">Total ${totalDiagnostics} / cached ${totalCached} / ast ${totalAst} / legacy ${totalLegacy} / formula ${totalFormula} / resolved ${totalResolved} / fallback ${totalFallback} / unsupported ${totalUnsupported}</div>${sheetsWithDiagnostics.map((file) => {
+    const diagnostics = sheetsWithDiagnostics.flatMap((file) => file.summary.formulaDiagnostics);
+    const totalStatuses = countByLabel(diagnostics, (diagnostic) => getFormulaStatusLabel(diagnostic.status), FORMULA_STATUS_LABELS);
+    const totalSources = countByLabel(diagnostics, (diagnostic) => getFormulaSourceLabel(diagnostic.source), FORMULA_SOURCE_LABELS);
+    return `<div class="md-summary-overview">Total ${diagnostics.length} / cached ${totalSources.cached} / ast ${totalSources.ast} / legacy ${totalSources.legacy} / formula ${totalSources.formula} / resolved ${totalStatuses.resolved} / fallback ${totalStatuses.fallback} / unsupported ${totalStatuses.unsupported}</div>${sheetsWithDiagnostics.map((file) => {
       const items = [...file.summary.formulaDiagnostics].sort((left, right) => {
         const priorityDiff = getFormulaStatusPriority(left.status) - getFormulaStatusPriority(right.status);
         if (priorityDiff !== 0) {
@@ -343,14 +321,14 @@
 
   function renderAnalysisSummary(files: WorkbookFile[], workbookName: string): string {
     if (files.length === 0) {
-      return '<div class="md-summary-empty">No conversion yet.</div>';
+      return EMPTY_SUMMARY_HTML;
     }
-    const totalTables = files.reduce((sum, file) => sum + file.summary.tables, 0);
-    const totalNarratives = files.reduce((sum, file) => sum + file.summary.narrativeBlocks, 0);
-    const totalMerges = files.reduce((sum, file) => sum + file.summary.merges, 0);
-    const totalImages = files.reduce((sum, file) => sum + file.summary.images, 0);
-    const totalCells = files.reduce((sum, file) => sum + file.summary.cells, 0);
-    const totalFormulas = files.reduce((sum, file) => sum + file.summary.formulaDiagnostics.length, 0);
+    const totalTables = sumFileMetric(files, (file) => file.summary.tables);
+    const totalNarratives = sumFileMetric(files, (file) => file.summary.narrativeBlocks);
+    const totalMerges = sumFileMetric(files, (file) => file.summary.merges);
+    const totalImages = sumFileMetric(files, (file) => file.summary.images);
+    const totalCells = sumFileMetric(files, (file) => file.summary.cells);
+    const totalFormulas = sumFileMetric(files, (file) => file.summary.formulaDiagnostics.length);
     const outputMode = files[0]?.summary.outputMode || "display";
     const formattingMode = files[0]?.summary.formattingMode || "plain";
     const tableDetectionMode = files[0]?.summary.tableDetectionMode || "balanced";
@@ -511,10 +489,7 @@
 
   function renderCurrentSelection(): void {
     if (!currentFiles.length) {
-      setSummaryText("No conversion yet.");
-      setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-      setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-      setPreviewMarkdown("");
+      resetRenderedWorkbookState("No conversion yet.");
       updatePreviewModeBanner(getSelectedOutputMode());
       return;
     }
@@ -645,12 +620,7 @@
       currentWorkbookBytes = null;
       currentWorkbookName = "";
       currentParsedIncludeShapeDetails = null;
-      setSummaryText("Failed to load the workbook.");
-      setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-      setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-      setPreviewMarkdown("");
-      getElement<HTMLButtonElement>("downloadBtn").disabled = true;
-      getElement<HTMLButtonElement>("exportZipBtn").disabled = true;
+      resetRenderedWorkbookState("Failed to load the workbook.");
       showError(error instanceof Error ? error.message : "Failed to load the xlsx file.");
     } finally {
       setLoading(false);
@@ -699,17 +669,12 @@
 
   function initialize(): void {
     clearError();
-    setSummaryText("No conversion yet.");
-    setScoreSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-    setFormulaSummaryHtml('<div class="md-summary-empty">No conversion yet.</div>');
-    setPreviewMarkdown("");
+    resetRenderedWorkbookState("No conversion yet.");
     updateOutputModeNotice(getSelectedOutputMode());
     updateFormattingModeNotice(getOptions().formattingMode);
     updateTableDetectionModeNotice(getOptions().tableDetectionMode);
     syncEncodingControls();
     updatePreviewModeBanner(getSelectedOutputMode());
-    getElement<HTMLButtonElement>("downloadBtn").disabled = true;
-    getElement<HTMLButtonElement>("exportZipBtn").disabled = true;
     bindFileInput();
     bindActions();
   }

@@ -1,25 +1,16 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const markdownNormalizeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-normalize.js"),
-  "utf8"
-);
-
 function bootMarkdownNormalize() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(markdownNormalizeCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("markdownNormalize");
+  return bootRegisteredModule(__dirname, ["src/js/markdown-normalize.js"], "markdownNormalize");
 }
 
 describe("xlsx2md markdown normalize", () => {
@@ -27,6 +18,13 @@ describe("xlsx2md markdown normalize", () => {
     const api = bootMarkdownNormalize();
 
     expect(api.normalizeMarkdownText(" a\r\nb\tc\u0007d ")).toBe(" a b c d ");
+  });
+
+  it("normalizes markdown newlines without changing other characters", () => {
+    const api = bootMarkdownNormalize();
+
+    expect(api.normalizeMarkdownNewlines("a\r\nb\rc\nd")).toBe("a\nb\nc\nd");
+    expect(api.normalizeMarkdownNewlines("a\r\nb", " / ")).toBe("a / b");
   });
 
   it("replaces unsafe unicode format and separator characters with spaces", () => {
