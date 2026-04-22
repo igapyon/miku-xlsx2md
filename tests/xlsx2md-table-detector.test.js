@@ -126,7 +126,7 @@ describe("xlsx2md table detector", () => {
     );
 
     expect(matrix).toEqual([
-      ["Header", "[MERGED←]"],
+      ["Header", "[←M←]"],
       ["Value", "A"]
     ]);
   });
@@ -245,6 +245,119 @@ describe("xlsx2md table detector", () => {
       { startRow: 5, startCol: 1, endRow: 6, endCol: 3 },
       { startRow: 5, startCol: 5, endRow: 6, endCol: 7 }
     ]);
+  });
+
+  it("does not treat a wide sparse merge-heavy bordered form block as a table", () => {
+    const api = bootTableDetector();
+    const cells = [];
+    for (let row = 1; row <= 6; row += 1) {
+      for (let col = 1; col <= 12; col += 1) {
+        let value = "";
+        if (col === 1) value = `label${row}`;
+        if (row === 2 && col === 8) value = "開始日時";
+        if (row === 4 && col === 8) value = "終了日時";
+        cells.push(createCell(row, col, value, { top: true, bottom: true, left: true, right: true }));
+      }
+    }
+    const sheet = {
+      cells,
+      merges: [
+        { startRow: 1, startCol: 2, endRow: 1, endCol: 12, ref: "B1:L1" },
+        { startRow: 2, startCol: 2, endRow: 2, endCol: 7, ref: "B2:G2" },
+        { startRow: 2, startCol: 8, endRow: 2, endCol: 12, ref: "H2:L2" },
+        { startRow: 3, startCol: 2, endRow: 3, endCol: 12, ref: "B3:L3" },
+        { startRow: 4, startCol: 2, endRow: 4, endCol: 7, ref: "B4:G4" },
+        { startRow: 4, startCol: 8, endRow: 4, endCol: 12, ref: "H4:L4" },
+        { startRow: 5, startCol: 2, endRow: 5, endCol: 12, ref: "B5:L5" },
+        { startRow: 6, startCol: 2, endRow: 6, endCol: 12, ref: "B6:L6" }
+      ]
+    };
+
+    const candidates = api.detectTableCandidates(sheet, buildCellMap);
+
+    expect(candidates).toHaveLength(0);
+  });
+
+  it("drops calendar-like narrow table candidates when many columns line up in the same band", () => {
+    const api = bootTableDetector();
+    const sheet = {
+      cells: [
+        createCell(1, 1, "月", { top: true, bottom: true, left: true }),
+        createCell(1, 2, "予定", { top: true, bottom: true, right: true }),
+        createCell(2, 1, "1", { bottom: true, left: true }),
+        createCell(2, 2, "A", { bottom: true, right: true }),
+        createCell(3, 1, "2", { bottom: true, left: true }),
+        createCell(3, 2, "B", { bottom: true, right: true }),
+        createCell(4, 1, "3", { bottom: true, left: true }),
+        createCell(4, 2, "C", { bottom: true, right: true }),
+
+        createCell(1, 4, "火", { top: true, bottom: true, left: true }),
+        createCell(1, 5, "予定", { top: true, bottom: true, right: true }),
+        createCell(2, 4, "1", { bottom: true, left: true }),
+        createCell(2, 5, "D", { bottom: true, right: true }),
+        createCell(3, 4, "2", { bottom: true, left: true }),
+        createCell(3, 5, "E", { bottom: true, right: true }),
+        createCell(4, 4, "3", { bottom: true, left: true }),
+        createCell(4, 5, "F", { bottom: true, right: true }),
+
+        createCell(1, 7, "水", { top: true, bottom: true, left: true }),
+        createCell(1, 8, "予定", { top: true, bottom: true, right: true }),
+        createCell(2, 7, "1", { bottom: true, left: true }),
+        createCell(2, 8, "G", { bottom: true, right: true }),
+        createCell(3, 7, "2", { bottom: true, left: true }),
+        createCell(3, 8, "H", { bottom: true, right: true }),
+        createCell(4, 7, "3", { bottom: true, left: true }),
+        createCell(4, 8, "I", { bottom: true, right: true })
+      ],
+      merges: []
+    };
+
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "border");
+
+    expect(candidates).toHaveLength(0);
+  });
+
+  it("does not treat a tiny merged label stub as a bordered table", () => {
+    const api = bootTableDetector();
+    const sheet = {
+      cells: [
+        createCell(4, 18, "金曜日", { top: true, bottom: true, left: true }),
+        createCell(4, 19, "", { top: true, bottom: true, right: true })
+      ],
+      merges: [
+        { startRow: 4, startCol: 18, endRow: 4, endCol: 19, ref: "R4:S4" }
+      ]
+    };
+
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced");
+
+    expect(candidates).toHaveLength(0);
+  });
+
+  it("does not keep a huge fallback candidate for a merge-heavy mixed layout sheet", () => {
+    const api = bootTableDetector();
+    const cells = [];
+    for (let row = 1; row <= 24; row += 1) {
+      for (let col = 1; col <= 9; col += 1) {
+        let value = "";
+        if (row <= 6 && col === 1) value = `見出し${row}`;
+        if (row >= 7 && row <= 24) value = `${row}-${col}`;
+        cells.push(createCell(row, col, value));
+      }
+    }
+    const sheet = {
+      cells,
+      merges: [
+        { startRow: 1, startCol: 1, endRow: 1, endCol: 9, ref: "A1:I1" },
+        { startRow: 2, startCol: 2, endRow: 2, endCol: 4, ref: "B2:D2" },
+        { startRow: 2, startCol: 5, endRow: 2, endCol: 7, ref: "E2:G2" },
+        { startRow: 3, startCol: 2, endRow: 3, endCol: 4, ref: "B3:D3" }
+      ]
+    };
+
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced");
+
+    expect(candidates).toHaveLength(0);
   });
 
   it("currently detects a dense borderless 2x2 block as a table candidate", () => {
