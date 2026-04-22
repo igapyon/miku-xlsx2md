@@ -38,9 +38,68 @@
     return !!(parent && child && child.startCol > parent.startCol);
   }
 
+  function isWeekdayToken(value: string): boolean {
+    const normalized = String(value || "").trim();
+    return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+  }
+
+  function isIsoDateToken(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+  }
+
+  function isCalendarLikeItem(item: NarrativeItem | null | undefined): boolean {
+    if (!item || !Array.isArray(item.cellValues)) {
+      return false;
+    }
+    const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+    if (values.length < 5) {
+      return false;
+    }
+    const weekdayCount = values.filter(isWeekdayToken).length;
+    const dateCount = values.filter(isIsoDateToken).length;
+    return weekdayCount >= 5 || dateCount >= 5 || values.length >= 7;
+  }
+
+  function isCalendarLikeNarrativeBlock(block: NarrativeBlock): boolean {
+    if (!block.items || block.items.length < 2) {
+      return false;
+    }
+    const calendarLikeItems = block.items.filter((item) => isCalendarLikeItem(item));
+    return calendarLikeItems.length >= 2;
+  }
+
+  function renderCalendarLikeItem(item: NarrativeItem): string {
+    const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+    if (values.length === 0) {
+      return normalizeNarrativeText(item.text);
+    }
+    if (values.every(isWeekdayToken)) {
+      return formatNarrativeHeading(values.join(" "));
+    }
+    if (values.every((value) => isIsoDateToken(value) || isWeekdayToken(value))) {
+      return values.join(" | ");
+    }
+    return values.join(" | ");
+  }
+
+  function renderCalendarLikeNarrativeBlock(block: NarrativeBlock): string {
+    return block.items
+      .map((item) => {
+        const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+        if (isCalendarLikeItem(item) || values.length >= 2) {
+          return renderCalendarLikeItem(item);
+        }
+        return normalizeNarrativeText(item.text);
+      })
+      .join("\n\n");
+  }
+
   function renderNarrativeBlock(block: NarrativeBlock): string {
     if (!block.items || block.items.length === 0) {
       return block.lines.map((line) => normalizeNarrativeText(line)).join("\n");
+    }
+    if (isCalendarLikeNarrativeBlock(block)) {
+      return renderCalendarLikeNarrativeBlock(block);
     }
     const parts: string[] = [];
     let index = 0;
@@ -77,7 +136,8 @@
 
   const narrativeStructureApi = {
     renderNarrativeBlock,
-    isSectionHeadingNarrativeBlock
+    isSectionHeadingNarrativeBlock,
+    isCalendarLikeNarrativeBlock
   };
 
   moduleRegistry.registerModule("narrativeStructure", narrativeStructureApi);

@@ -64,6 +64,13 @@ Links:
 - Handle sensitive files locally without uploading them to a server
 - Use the tool in a browser without installing additional applications
 
+## Current Status
+
+- `display / raw / both`, `plain / github`, and `balanced / border` are implemented in both the browser UI and the Node.js CLI
+- Output `encoding` / `bom` switching is implemented for Markdown export and ZIP export
+- Layout-heavy sheets are handled with lightweight section grouping, but calendar / board / dashboard style sheets still have room for improvement
+- Markdown escaping, formula coverage, and layout interpretation continue to be refined incrementally
+
 ## How to use
 
 1. Open `miku-xlsx2md.html` in a web browser
@@ -361,6 +368,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 - `balanced` は従来どおりの表検出モードです
 - `border` は非罫線ベースの誤検知が辛いシート向けの表検出モードです
 - 内部的には `markdown escape -> rich text parser -> plain/github formatter -> table escape` の段階分離を進めています
+- レイアウト中心シートでは、縦ギャップを使った軽量な section grouping を実装済みですが、専用の意味分解は今後の改善対象です
 - Markdown 記号を含む生文字の escape は段階的に整理中です。現状の設計メモは [docs/rich-text-markdown-rendering.md](./docs/rich-text-markdown-rendering.md) を参照してください
 
 ## Tech Stack

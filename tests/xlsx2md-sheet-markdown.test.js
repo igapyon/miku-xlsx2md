@@ -137,6 +137,73 @@ describe("xlsx2md sheet markdown", () => {
     ]);
   });
 
+  it("splits same-row section anchors when they are far apart horizontally", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sheet = {
+      cells: [],
+      images: [],
+      charts: []
+    };
+    const tables = [];
+    const narrativeBlocks = [
+      {
+        startRow: 1,
+        startCol: 1,
+        endRow: 1,
+        lines: ["イベント チェックリスト"],
+        items: [{ row: 1, startCol: 1, text: "イベント チェックリスト", cellValues: ["イベント チェックリスト"] }]
+      },
+      {
+        startRow: 1,
+        startCol: 8,
+        endRow: 1,
+        lines: ["イベント カテゴリ"],
+        items: [{ row: 1, startCol: 8, text: "イベント カテゴリ", cellValues: ["イベント カテゴリ"] }]
+      }
+    ];
+
+    expect(api.extractSectionBlocks(sheet, tables, narrativeBlocks)).toEqual([
+      { startRow: 1, startCol: 1, endRow: 1, endCol: 1 },
+      { startRow: 1, startCol: 8, endRow: 1, endCol: 8 }
+    ]);
+  });
+
+  it("keeps nearby calendar-like anchors in one section block even when horizontally separated", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sheet = {
+      cells: [],
+      images: [],
+      charts: []
+    };
+    const tables = [];
+    const narrativeBlocks = [
+      {
+        startRow: 11,
+        startCol: 3,
+        endRow: 17,
+        lines: ["2021-01-03 ..."],
+        items: [
+          { row: 11, startCol: 3, text: "2021-01-03 ...", cellValues: ["2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09"] }
+        ]
+      },
+      {
+        startRow: 24,
+        startCol: 25,
+        endRow: 30,
+        lines: ["2020-12-01 ..."],
+        items: [
+          { row: 24, startCol: 25, text: "2020-12-01 ...", cellValues: ["2020-12-01", "2020-12-02", "2020-12-03", "2020-12-04", "2020-12-05"] }
+        ]
+      }
+    ];
+
+    expect(api.extractSectionBlocks(sheet, tables, narrativeBlocks)).toEqual([
+      { startRow: 11, startCol: 3, endRow: 30, endCol: 25 }
+    ]);
+  });
+
   it("sorts and renders grouped sections with separators only between blocks", () => {
     const module = bootSheetMarkdown();
     const api = module.createSheetMarkdownApi(createDeps());
@@ -169,6 +236,59 @@ describe("xlsx2md sheet markdown", () => {
       }
     ]);
     expect(api.renderGroupedSectionBody(grouped)).toBe("First\n\nSecond\n\n---\n\nThird");
+  });
+
+  it("reorders calendar-like grouped entries to place header and sidebar around the main block", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const header = {
+      sortRow: 2,
+      sortCol: 3,
+      markdown: "2021年1月\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 2,
+        startCol: 3,
+        endRow: 2,
+        lines: ["2021年1月"],
+        items: [{ row: 2, startCol: 3, text: "2021年1月", cellValues: ["2021年1月"] }]
+      }
+    };
+    const main = {
+      sortRow: 11,
+      sortCol: 3,
+      markdown: "2021-01-03 | 2021-01-04 | 2021-01-05 | 2021-01-06 | 2021-01-07 | 2021-01-08 | 2021-01-09\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 11,
+        startCol: 3,
+        endRow: 11,
+        lines: ["2021-01-03 ..."],
+        items: [{ row: 11, startCol: 3, text: "2021-01-03 ...", cellValues: ["2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09"] }]
+      }
+    };
+    const sidebar = {
+      sortRow: 24,
+      sortCol: 25,
+      markdown: "2020-12-01\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 24,
+        startCol: 25,
+        endRow: 24,
+        lines: ["2020-12-01"],
+        items: [{ row: 24, startCol: 25, text: "2020-12-01", cellValues: ["2020-12-01", "2020-12-02", "2020-12-03", "2020-12-04", "2020-12-05"] }]
+      }
+    };
+
+    const reordered = api.createCalendarAwareSectionEntries([sidebar, main, header]);
+
+    expect(reordered.map((entry) => entry.markdown.trim())).toEqual([
+      "2021年1月",
+      "2021-01-03 | 2021-01-04 | 2021-01-05 | 2021-01-06 | 2021-01-07 | 2021-01-08 | 2021-01-09",
+      "### Sidebar",
+      "2020-12-01"
+    ]);
   });
 
   it("renders image and chart sections with stable headings and metadata", () => {
@@ -263,6 +383,41 @@ describe("xlsx2md sheet markdown", () => {
     expect(result.markdown).toContain("# Book: book.xlsx");
     expect(result.markdown).toContain("## Sheet: Sheet1");
     expect(result.summary.narrativeBlocks).toBe(1);
+  });
+
+  it("keeps nearby calendar rows in one narrative block even when later rows shift right", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderNarrativeBlock: (block) => block.lines.join("\n")
+    }));
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [
+        { address: "A1", row: 1, col: 1, outputValue: "2021-01-03", rawValue: "2021-01-03", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "B1", row: 1, col: 2, outputValue: "2021-01-04", rawValue: "2021-01-04", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "C1", row: 1, col: 3, outputValue: "2021-01-05", rawValue: "2021-01-05", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "D1", row: 1, col: 4, outputValue: "2021-01-06", rawValue: "2021-01-06", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "E1", row: 1, col: 5, outputValue: "2021-01-07", rawValue: "2021-01-07", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "F1", row: 1, col: 6, outputValue: "2021-01-08", rawValue: "2021-01-08", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "G1", row: 1, col: 7, outputValue: "2021-01-09", rawValue: "2021-01-09", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "J2", row: 2, col: 10, outputValue: "仕事", rawValue: "仕事", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "K2", row: 2, col: 11, outputValue: "私用", rawValue: "私用", formulaText: "", resolutionStatus: null, resolutionSource: null }
+      ],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const blocks = api.extractNarrativeBlocks(workbook, sheet, [], {});
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].lines).toEqual([
+      "2021-01-03 2021-01-04 2021-01-05 2021-01-06 2021-01-07 2021-01-08 2021-01-09",
+      "仕事 私用"
+    ]);
   });
 
   it("collects render state and uses empty-body fallback text", () => {

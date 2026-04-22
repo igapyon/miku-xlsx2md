@@ -71,7 +71,7 @@
 既存の文字列ベース resolver は、当面は削除対象ではない。
 
 - 現時点では、`AST evaluator` が未対応の式を救うための互換 fallback として必要である
-- `local-data` の実戦ブックで、想定外の式や Excel 特有の揺れに対する安全装置として機能する
+- git 管理外の実戦ブックで、想定外の式や Excel 特有の揺れに対する安全装置として機能する
 - したがって、短期的には「安全のために残す」方針を採る
 
 一方で、中長期的な方向性は次の通りである。
@@ -439,8 +439,8 @@ Primary
 
 ### 観測状況
 
-- `scripts/observe-xlsx2md-formulas.mjs` で `local-data` を観測可能
-- 現在は parser 観点では `local-data/` の全対象で `ast_ng 0`
+- `scripts/observe-xlsx2md-formulas.mjs` で手元実データを観測可能
+- 現在は parser 観点では手元実データの全対象で `ast_ng 0`
 - 次段の焦点は parser ではなく、AST evaluator をどこまで優先し、どの関数群をさらに寄せるか
 
 ## 未決事項

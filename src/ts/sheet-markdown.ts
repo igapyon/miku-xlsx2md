@@ -87,6 +87,7 @@
     startCol: number;
     endRow: number;
     endCol: number;
+    calendarLike?: boolean;
   };
 
   type ParsedImageAsset = {
@@ -523,6 +524,37 @@
       return !current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3;
     }
 
+    function isIsoDateToken(value: string): boolean {
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+    }
+
+    function isWeekdayToken(value: string): boolean {
+      const normalized = String(value || "").trim();
+      return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+    }
+
+    function isCalendarDateItem(item: NarrativeItem | null | undefined): boolean {
+      if (!item) return false;
+      const values = (item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean);
+      return values.length >= 5 && values.every((value) => isIsoDateToken(value) || isWeekdayToken(value));
+    }
+
+    function blockHasCalendarDateItem(block: NarrativeBlock | null | undefined): boolean {
+      return !!block?.items?.some((item) => isCalendarDateItem(item));
+    }
+
+    function shouldAppendToCalendarNarrativeBlock(current: NarrativeBlock | null, item: NarrativeItem, previousRow: number): boolean {
+      if (!current || !blockHasCalendarDateItem(current)) {
+        return false;
+      }
+      const rowGap = item.row - previousRow;
+      if (rowGap < 0 || rowGap > 4) {
+        return false;
+      }
+      const startColDelta = Math.abs(item.startCol - current.startCol);
+      return startColDelta <= 24 || isCalendarDateItem(item);
+    }
+
     function createNarrativeBlockFromItem(item: NarrativeItem): NarrativeBlock {
       return {
         startRow: item.row,
@@ -551,7 +583,9 @@
       let previousRow = -100;
 
       for (const item of items) {
-        if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
+        if (shouldAppendToCalendarNarrativeBlock(current, item, previousRow)) {
+          appendNarrativeItem(current, item);
+        } else if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
           current = createNarrativeBlockFromItem(item);
           blocks.push(current);
         } else {
@@ -568,7 +602,8 @@
         startRow: block.startRow,
         startCol: block.startCol,
         endRow: block.endRow,
-        endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
+        endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol)),
+        calendarLike: blockHasCalendarDateItem(block)
       }));
     }
 
@@ -627,10 +662,35 @@
       };
     }
 
-    function shouldStartNewSectionBlock(current: SectionBlock | null, anchor: SectionAnchor, previousEndRow: number): boolean {
+    function shouldStartNewSectionBlock(
+      current: SectionBlock | null,
+      anchor: SectionAnchor,
+      previousEndRow: number,
+      previousAnchor: SectionAnchor | null
+    ): boolean {
       const verticalGapThreshold = 4;
+      const horizontalGapThreshold = 3;
       const gap = anchor.startRow - previousEndRow;
-      return !current || gap > verticalGapThreshold;
+      if (!current) {
+        return true;
+      }
+      if (gap > verticalGapThreshold) {
+        const bothCalendarLike = !!(anchor.calendarLike && previousAnchor?.calendarLike);
+        const horizontalGap = anchor.startCol - current.endCol;
+        if (!(bothCalendarLike && gap <= 8 && horizontalGap <= 24)) {
+          return true;
+        }
+      }
+      const overlapsCurrentRows = anchor.startRow <= current.endRow + 1;
+      const horizontalGap = anchor.startCol - current.endCol;
+      const bothCalendarLike = !!(anchor.calendarLike && previousAnchor?.calendarLike);
+      if (bothCalendarLike && horizontalGap <= 24 && (overlapsCurrentRows || gap <= 8)) {
+        return false;
+      }
+      if (overlapsCurrentRows && horizontalGap > horizontalGapThreshold) {
+        return true;
+      }
+      return false;
     }
 
     function extendSectionBlock(section: SectionBlock, anchor: SectionAnchor): void {
@@ -649,15 +709,17 @@
       const sections: SectionBlock[] = [];
       let current: SectionBlock | null = null;
       let previousEndRow = -100;
+      let previousAnchor: SectionAnchor | null = null;
 
       for (const anchor of anchors) {
-        if (shouldStartNewSectionBlock(current, anchor, previousEndRow)) {
+        if (shouldStartNewSectionBlock(current, anchor, previousEndRow, previousAnchor)) {
           current = createSectionBlockFromAnchor(anchor);
           sections.push(current);
         } else {
           extendSectionBlock(current, anchor);
         }
         previousEndRow = Math.max(previousEndRow, anchor.endRow);
+        previousAnchor = anchor;
       }
 
       return sections;
@@ -866,7 +928,88 @@
     }
 
     function renderGroupedSectionEntries(entries: ContentSection[]): string {
-      return entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+      return createCalendarAwareSectionEntries(entries).map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+    }
+
+    function isIsoDateToken(value: string): boolean {
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+    }
+
+    function isWeekdayToken(value: string): boolean {
+      const normalized = String(value || "").trim();
+      return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+    }
+
+    function getNarrativeValues(section: ContentSection): string[] {
+      return section.narrativeBlock?.items.flatMap((item) => item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean) || [];
+    }
+
+    function isCalendarBodySection(section: ContentSection): boolean {
+      if (section.kind !== "narrative" || !section.narrativeBlock) return false;
+      return section.narrativeBlock.items.some((item) => {
+        const values = (item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean);
+        return values.length >= 5 && values.every((value) => isIsoDateToken(value) || isWeekdayToken(value));
+      });
+    }
+
+    function isCalendarHeaderSection(section: ContentSection): boolean {
+      if (section.kind !== "narrative" || !section.narrativeBlock) return false;
+      const values = getNarrativeValues(section);
+      if (values.length === 0 || values.length > 10) return false;
+      const allWeekdays = values.length >= 5 && values.every((value) => isWeekdayToken(value));
+      const hasMonthTitle = values.some((value) => /^\d{4}年\d{1,2}月$/.test(value));
+      const hasPlannerLabel = values.includes("目標と優先事項") || values.includes("その他");
+      return allWeekdays || hasMonthTitle || hasPlannerLabel;
+    }
+
+    function createSyntheticSection(markdown: string, sortRow: number, sortCol: number): ContentSection {
+      return {
+        sortRow,
+        sortCol,
+        markdown,
+        kind: "narrative"
+      };
+    }
+
+    function createCalendarAwareSectionEntries(entries: ContentSection[]): ContentSection[] {
+      const mainCalendarEntries = entries.filter((entry) => isCalendarBodySection(entry))
+        .sort((left, right) => {
+          if (left.sortCol !== right.sortCol) return left.sortCol - right.sortCol;
+          return left.sortRow - right.sortRow;
+        });
+      if (mainCalendarEntries.length === 0) {
+        return entries;
+      }
+      const main = mainCalendarEntries[0];
+      const headerEntries = entries.filter((entry) => (
+        entry !== main
+        && isCalendarHeaderSection(entry)
+        && entry.sortRow <= main.sortRow + 1
+      ));
+      const sidebarEntries = entries.filter((entry) => (
+        entry !== main
+        && !headerEntries.includes(entry)
+        && isCalendarBodySection(entry)
+        && entry.sortCol >= main.sortCol + 10
+      ));
+      const remainingEntries = entries.filter((entry) => (
+        entry !== main
+        && !headerEntries.includes(entry)
+        && !sidebarEntries.includes(entry)
+      ));
+      if (headerEntries.length === 0 && sidebarEntries.length === 0) {
+        return entries;
+      }
+      const reordered: ContentSection[] = [];
+      reordered.push(...headerEntries);
+      reordered.push(main);
+      if (sidebarEntries.length > 0) {
+        const firstSidebar = sidebarEntries[0];
+        reordered.push(createSyntheticSection("### Sidebar\n", firstSidebar.sortRow - 0.1, firstSidebar.sortCol));
+        reordered.push(...sidebarEntries);
+      }
+      reordered.push(...remainingEntries);
+      return reordered;
     }
 
     function renderGroupedSectionBody(groupedSections: GroupedSection[]): string {
@@ -989,6 +1132,7 @@
       extractSectionBlocks,
       sortContentSections,
       createGroupedSections,
+      createCalendarAwareSectionEntries,
       renderGroupedSectionBody,
       collectSheetRenderState,
       createSheetMarkdownText,

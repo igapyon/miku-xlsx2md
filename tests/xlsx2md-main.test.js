@@ -3309,6 +3309,64 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).not.toContain("イベント チェックリスト イベント カテゴリ");
   });
 
+  it("does not turn repeated narrow calendar-like columns into many small tables", () => {
+    const api = bootCore();
+    const workbook = { name: "calendar-layout.xlsx" };
+    const sheet = {
+      name: "Calendar",
+      index: 1,
+      path: "xl/worksheets/sheet1.xml",
+      merges: [],
+      tables: [],
+      images: [],
+      maxRow: 4,
+      maxCol: 8,
+      cells: [
+        { row: 1, col: 1, address: "A1", valueType: "str", rawValue: "月", outputValue: "月", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 2, address: "B1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 1, address: "A2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 2, address: "B2", valueType: "str", rawValue: "A", outputValue: "A", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 1, address: "A3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 2, address: "B3", valueType: "str", rawValue: "B", outputValue: "B", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 1, address: "A4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 2, address: "B4", valueType: "str", rawValue: "C", outputValue: "C", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+
+        { row: 1, col: 4, address: "D1", valueType: "str", rawValue: "火", outputValue: "火", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 5, address: "E1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 4, address: "D2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 5, address: "E2", valueType: "str", rawValue: "D", outputValue: "D", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 4, address: "D3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 5, address: "E3", valueType: "str", rawValue: "E", outputValue: "E", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 4, address: "D4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 5, address: "E4", valueType: "str", rawValue: "F", outputValue: "F", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+
+        { row: 1, col: 7, address: "G1", valueType: "str", rawValue: "水", outputValue: "水", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 8, address: "H1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 7, address: "G2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 8, address: "H2", valueType: "str", rawValue: "G", outputValue: "G", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 7, address: "G3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 8, address: "H3", valueType: "str", rawValue: "H", outputValue: "H", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 7, address: "G4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 8, address: "H4", valueType: "str", rawValue: "I", outputValue: "I", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" }
+      ]
+    };
+
+    const markdownFile = api.convertSheetToMarkdown(workbook, sheet, {
+      trimText: true,
+      removeEmptyRows: true,
+      removeEmptyColumns: true,
+      treatFirstRowAsHeader: true,
+      tableDetectionMode: "border"
+    });
+
+    expect(markdownFile.summary.tables).toBe(0);
+    expect(markdownFile.summary.narrativeBlocks).toBeGreaterThan(0);
+    expect(markdownFile.markdown).not.toContain("### Table: 001");
+    expect(markdownFile.markdown).toContain("月 予定");
+    expect(markdownFile.markdown).toContain("火 予定");
+    expect(markdownFile.markdown).toContain("水 予定");
+  });
+
   it("treats empty-string cached formula results as cached", async () => {
     const api = bootCore();
     const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
