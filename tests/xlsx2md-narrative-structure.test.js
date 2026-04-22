@@ -1,30 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const markdownNormalizeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-normalize.js"),
-  "utf8"
-);
-const narrativeStructureCode = readFileSync(
-  path.resolve(__dirname, "../src/js/narrative-structure.js"),
-  "utf8"
-);
-
 function bootNarrativeStructure() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(markdownNormalizeCode)();
-  new Function(narrativeStructureCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("narrativeStructure");
+  return bootRegisteredModule(__dirname, [
+    "src/js/markdown-normalize.js",
+    "src/js/narrative-structure.js"
+  ], "narrativeStructure");
 }
 
 describe("xlsx2md narrative structure", () => {
@@ -61,6 +50,25 @@ describe("xlsx2md narrative structure", () => {
     });
 
     expect(markdown).toBe("一行目\n\n二行目");
+  });
+
+  it("normalizes heading and list markers inside hierarchical narrative items", () => {
+    const api = bootNarrativeStructure();
+    const markdown = api.renderNarrativeBlock({
+      startRow: 1,
+      startCol: 1,
+      endRow: 3,
+      lines: ["### 親", "- 子", "1. 孫"],
+      items: [
+        { row: 1, startCol: 1, text: "### 親", cellValues: ["### 親"] },
+        { row: 2, startCol: 2, text: "- 子", cellValues: ["- 子"] },
+        { row: 3, startCol: 2, text: "1. 孫", cellValues: ["1. 孫"] }
+      ]
+    });
+
+    expect(markdown).toContain("### 親");
+    expect(markdown).toContain("- 子");
+    expect(markdown).toContain("- 孫");
   });
 
   it("starts a new heading when indentation returns to the parent level", () => {
@@ -110,5 +118,26 @@ describe("xlsx2md narrative structure", () => {
         { row: 2, startCol: 1, text: "二行目", cellValues: ["二行目"] }
       ]
     })).toBe(false);
+  });
+
+  it("renders calendar-like narrative rows with cell boundaries preserved", () => {
+    const api = bootNarrativeStructure();
+    const markdown = api.renderNarrativeBlock({
+      startRow: 1,
+      startCol: 1,
+      endRow: 4,
+      lines: ["2021年1月", "日 月 火 水 木 金 土", "2021-01-03 2021-01-04 2021-01-05 2021-01-06 2021-01-07 2021-01-08 2021-01-09", "仕事 私用 その他"],
+      items: [
+        { row: 1, startCol: 1, text: "2021年1月", cellValues: ["2021年1月"] },
+        { row: 2, startCol: 1, text: "日 月 火 水 木 金 土", cellValues: ["日", "月", "火", "水", "木", "金", "土"] },
+        { row: 3, startCol: 1, text: "2021-01-03 2021-01-04 2021-01-05 2021-01-06 2021-01-07 2021-01-08 2021-01-09", cellValues: ["2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09"] },
+        { row: 4, startCol: 1, text: "仕事 私用 その他", cellValues: ["仕事", "私用", "その他", "", "", "", ""] }
+      ]
+    });
+
+    expect(markdown).toContain("2021年1月");
+    expect(markdown).toContain("### 日 月 火 水 木 金 土");
+    expect(markdown).toContain("2021-01-03 | 2021-01-04 | 2021-01-05 | 2021-01-06 | 2021-01-07 | 2021-01-08 | 2021-01-09");
+    expect(markdown).toContain("仕事 | 私用 | その他");
   });
 });

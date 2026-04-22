@@ -1,195 +1,17 @@
 // @vitest-environment jsdom
 
-import { Blob as NodeBlob } from "node:buffer";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { DecompressionStream as NodeDecompressionStream } from "node:stream/web";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { bootXlsx2mdCore } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-if (typeof globalThis.Blob === "undefined" || typeof globalThis.Blob.prototype?.stream !== "function") {
-  globalThis.Blob = NodeBlob;
-}
-globalThis.DecompressionStream ??= NodeDecompressionStream;
-
-const officeDrawingCode = readFileSync(
-  path.resolve(__dirname, "../src/js/office-drawing.js"),
-  "utf8"
-);
-const moduleRegistryCode = readFileSync(
-  path.resolve(__dirname, "../src/js/module-registry.js"),
-  "utf8"
-);
-const moduleRegistryAccessCode = readFileSync(
-  path.resolve(__dirname, "../src/js/module-registry-access.js"),
-  "utf8"
-);
-const runtimeEnvCode = readFileSync(
-  path.resolve(__dirname, "../src/js/runtime-env.js"),
-  "utf8"
-);
-const zipIoCode = readFileSync(
-  path.resolve(__dirname, "../src/js/zip-io.js"),
-  "utf8"
-);
-const borderGridCode = readFileSync(
-  path.resolve(__dirname, "../src/js/border-grid.js"),
-  "utf8"
-);
-const markdownNormalizeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-normalize.js"),
-  "utf8"
-);
-const markdownEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-escape.js"),
-  "utf8"
-);
-const markdownTableEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-table-escape.js"),
-  "utf8"
-);
-const richTextParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-parser.js"),
-  "utf8"
-);
-const richTextPlainFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-plain-formatter.js"),
-  "utf8"
-);
-const richTextGithubFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-github-formatter.js"),
-  "utf8"
-);
-const richTextRendererCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-renderer.js"),
-  "utf8"
-);
-const narrativeStructureCode = readFileSync(
-  path.resolve(__dirname, "../src/js/narrative-structure.js"),
-  "utf8"
-);
-const tableDetectorCode = readFileSync(
-  path.resolve(__dirname, "../src/js/table-detector.js"),
-  "utf8"
-);
-const markdownExportCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-export.js"),
-  "utf8"
-);
-const textEncodingCode = readFileSync(
-  path.resolve(__dirname, "../src/js/text-encoding.js"),
-  "utf8"
-);
-const sheetMarkdownCode = readFileSync(
-  path.resolve(__dirname, "../src/js/sheet-markdown.js"),
-  "utf8"
-);
-const stylesParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/styles-parser.js"),
-  "utf8"
-);
-const sharedStringsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/shared-strings.js"),
-  "utf8"
-);
-const addressUtilsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/address-utils.js"),
-  "utf8"
-);
-const relsParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rels-parser.js"),
-  "utf8"
-);
-const worksheetTablesCode = readFileSync(
-  path.resolve(__dirname, "../src/js/worksheet-tables.js"),
-  "utf8"
-);
-const cellFormatCode = readFileSync(
-  path.resolve(__dirname, "../src/js/cell-format.js"),
-  "utf8"
-);
-const xmlUtilsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/xml-utils.js"),
-  "utf8"
-);
-const sheetAssetsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/sheet-assets.js"),
-  "utf8"
-);
-const worksheetParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/worksheet-parser.js"),
-  "utf8"
-);
-const workbookLoaderCode = readFileSync(
-  path.resolve(__dirname, "../src/js/workbook-loader.js"),
-  "utf8"
-);
-const formulaReferenceUtilsCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-reference-utils.js"),
-  "utf8"
-);
-const formulaEngineCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-engine.js"),
-  "utf8"
-);
-const formulaLegacyCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-legacy.js"),
-  "utf8"
-);
-const formulaAstCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-ast.js"),
-  "utf8"
-);
-const formulaResolverCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula-resolver.js"),
-  "utf8"
-);
-const coreCode = readFileSync(
-  path.resolve(__dirname, "../src/js/core.js"),
-  "utf8"
-);
-
 function bootCore() {
-  document.body.innerHTML = "";
-  new Function(moduleRegistryCode)();
-  new Function(moduleRegistryAccessCode)();
-  new Function(runtimeEnvCode)();
-  new Function(officeDrawingCode)();
-  new Function(zipIoCode)();
-  new Function(borderGridCode)();
-  new Function(markdownNormalizeCode)();
-  new Function(markdownEscapeCode)();
-  new Function(markdownTableEscapeCode)();
-  new Function(textEncodingCode)();
-  new Function(richTextParserCode)();
-  new Function(richTextPlainFormatterCode)();
-  new Function(richTextGithubFormatterCode)();
-  new Function(richTextRendererCode)();
-  new Function(narrativeStructureCode)();
-  new Function(tableDetectorCode)();
-  new Function(markdownExportCode)();
-  new Function(sheetMarkdownCode)();
-  new Function(stylesParserCode)();
-  new Function(sharedStringsCode)();
-  new Function(addressUtilsCode)();
-  new Function(relsParserCode)();
-  new Function(worksheetTablesCode)();
-  new Function(cellFormatCode)();
-  new Function(xmlUtilsCode)();
-  new Function(sheetAssetsCode)();
-  new Function(worksheetParserCode)();
-  new Function(workbookLoaderCode)();
-  new Function(formulaReferenceUtilsCode)();
-  new Function(formulaEngineCode)();
-  new Function(formulaLegacyCode)();
-  new Function(formulaAstCode)();
-  new Function(formulaResolverCode)();
-  new Function(coreCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("xlsx2md");
+  return bootXlsx2mdCore(__dirname);
 }
 
 function createStoredZip(entries) {
@@ -3485,6 +3307,64 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).toContain("イベント チェックリスト");
     expect(markdownFile.markdown).toContain("イベント カテゴリ");
     expect(markdownFile.markdown).not.toContain("イベント チェックリスト イベント カテゴリ");
+  });
+
+  it("does not turn repeated narrow calendar-like columns into many small tables", () => {
+    const api = bootCore();
+    const workbook = { name: "calendar-layout.xlsx" };
+    const sheet = {
+      name: "Calendar",
+      index: 1,
+      path: "xl/worksheets/sheet1.xml",
+      merges: [],
+      tables: [],
+      images: [],
+      maxRow: 4,
+      maxCol: 8,
+      cells: [
+        { row: 1, col: 1, address: "A1", valueType: "str", rawValue: "月", outputValue: "月", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 2, address: "B1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 1, address: "A2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 2, address: "B2", valueType: "str", rawValue: "A", outputValue: "A", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 1, address: "A3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 2, address: "B3", valueType: "str", rawValue: "B", outputValue: "B", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 1, address: "A4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 2, address: "B4", valueType: "str", rawValue: "C", outputValue: "C", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+
+        { row: 1, col: 4, address: "D1", valueType: "str", rawValue: "火", outputValue: "火", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 5, address: "E1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 4, address: "D2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 5, address: "E2", valueType: "str", rawValue: "D", outputValue: "D", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 4, address: "D3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 5, address: "E3", valueType: "str", rawValue: "E", outputValue: "E", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 4, address: "D4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 5, address: "E4", valueType: "str", rawValue: "F", outputValue: "F", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+
+        { row: 1, col: 7, address: "G1", valueType: "str", rawValue: "水", outputValue: "水", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 1, col: 8, address: "H1", valueType: "str", rawValue: "予定", outputValue: "予定", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: true, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 7, address: "G2", valueType: "str", rawValue: "1", outputValue: "1", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 2, col: 8, address: "H2", valueType: "str", rawValue: "G", outputValue: "G", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 7, address: "G3", valueType: "str", rawValue: "2", outputValue: "2", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 3, col: 8, address: "H3", valueType: "str", rawValue: "H", outputValue: "H", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 7, address: "G4", valueType: "str", rawValue: "3", outputValue: "3", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: true, right: false }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" },
+        { row: 4, col: 8, address: "H4", valueType: "str", rawValue: "I", outputValue: "I", formulaText: "", resolutionStatus: null, resolutionSource: null, styleIndex: 0, borders: { top: false, bottom: true, left: false, right: true }, numFmtId: 0, formatCode: "General", formulaType: "", spillRef: "" }
+      ]
+    };
+
+    const markdownFile = api.convertSheetToMarkdown(workbook, sheet, {
+      trimText: true,
+      removeEmptyRows: true,
+      removeEmptyColumns: true,
+      treatFirstRowAsHeader: true,
+      tableDetectionMode: "border"
+    });
+
+    expect(markdownFile.summary.tables).toBe(0);
+    expect(markdownFile.summary.narrativeBlocks).toBeGreaterThan(0);
+    expect(markdownFile.markdown).not.toContain("### Table: 001");
+    expect(markdownFile.markdown).toContain("月 予定");
+    expect(markdownFile.markdown).toContain("火 予定");
+    expect(markdownFile.markdown).toContain("水 予定");
   });
 
   it("treats empty-string cached formula results as cached", async () => {

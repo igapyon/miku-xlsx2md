@@ -191,6 +191,56 @@
     });
   }
 
+  function pruneCalendarLikeColumnCandidates(candidates: TableCandidate[]): TableCandidate[] {
+    const dropKeys = new Set<string>();
+    const sorted = [...candidates].sort((left, right) => {
+      if (left.startRow !== right.startRow) return left.startRow - right.startRow;
+      if (left.endRow !== right.endRow) return left.endRow - right.endRow;
+      return left.startCol - right.startCol;
+    });
+    let cluster: TableCandidate[] = [];
+
+    function flushCluster(): void {
+      if (cluster.length < 3) {
+        cluster = [];
+        return;
+      }
+      for (const candidate of cluster) {
+        dropKeys.add(`${candidate.startRow}:${candidate.startCol}:${candidate.endRow}:${candidate.endCol}`);
+      }
+      cluster = [];
+    }
+
+    function isCalendarLikeColumn(candidate: TableCandidate): boolean {
+      const rowCount = candidate.endRow - candidate.startRow + 1;
+      const colCount = candidate.endCol - candidate.startCol + 1;
+      return rowCount >= 4 && colCount <= 3;
+    }
+
+    for (const candidate of sorted) {
+      if (!isCalendarLikeColumn(candidate)) {
+        flushCluster();
+        continue;
+      }
+      const previous = cluster[cluster.length - 1];
+      if (!previous) {
+        cluster.push(candidate);
+        continue;
+      }
+      const sameBand = candidate.startRow === previous.startRow && candidate.endRow === previous.endRow;
+      const horizontalGap = candidate.startCol - previous.endCol;
+      if (sameBand && horizontalGap >= 1 && horizontalGap <= 2) {
+        cluster.push(candidate);
+      } else {
+        flushCluster();
+        cluster.push(candidate);
+      }
+    }
+    flushCluster();
+
+    return candidates.filter((candidate) => !dropKeys.has(`${candidate.startRow}:${candidate.startCol}:${candidate.endRow}:${candidate.endCol}`));
+  }
+
   function detectTableCandidates<TCell extends CellLike>(
     sheet: SheetLike<TCell>,
     buildCellMap: (sheet: SheetLike<TCell>) => Map<string, TCell>,
@@ -203,6 +253,17 @@
     const candidates: TableCandidate[] = [];
     const candidateKeys = new Set<string>();
 
+    function countSparseRows(component: TCell[], startRow: number, endRow: number): number {
+      let sparseRows = 0;
+      for (let row = startRow; row <= endRow; row += 1) {
+        const nonEmptyCount = component.filter((entry) => entry.row === row && entry.outputValue.trim()).length;
+        if (nonEmptyCount <= 2) {
+          sparseRows += 1;
+        }
+      }
+      return sparseRows;
+    }
+
     function maybePushCandidate(component: TCell[], sourceKind: "border" | "fallback" = "border"): void {
       const rows = component.map((entry) => entry.row);
       const cols = component.map((entry) => entry.col);
@@ -214,6 +275,8 @@
       const density = component.filter((entry) => entry.outputValue.trim()).length / area;
       const rowCount = endRow - startRow + 1;
       const colCount = endCol - startCol + 1;
+      const sparseRowCount = countSparseRows(component, startRow, endRow);
+      const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
       if (rowCount < 2 || colCount < 2) {
         return;
       }
@@ -257,14 +320,45 @@
       }
 
       if (sourceKind === "border") {
+        const looksLikeTinyMergedLabelStub = (
+          rowCount <= 2
+          && colCount <= 2
+          && mergedArea >= 1
+          && nonEmptyCells.length <= 2
+          && headerishCount <= 1
+        );
+        if (looksLikeTinyMergedLabelStub) {
+          return;
+        }
         if (mergedArea >= 2 && density < 0.25 && headerishCount < 2) {
           return;
         }
-      } else if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
-        return;
+        const looksLikeWideSparseMergeForm = (
+          colCount >= 8
+          && rowCount >= 4
+          && density < 0.45
+          && mergedArea >= Math.max(4, rowCount - 1)
+          && sparseRowCount >= Math.ceil(rowCount * 0.7)
+        );
+        if (looksLikeWideSparseMergeForm) {
+          return;
+        }
+      } else {
+        if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
+          return;
+        }
+        const looksLikeMixedLayoutSheet = (
+          rowCount >= 20
+          && colCount >= 8
+          && mergedArea >= 4
+          && sparseRowCount >= 4
+          && density < 0.8
+        );
+        if (looksLikeMixedLayoutSheet) {
+          return;
+        }
       }
 
-      const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
       const avgTextLength = nonEmptyCells
         .reduce((sum, entry) => sum + entry.outputValue.trim().length, 0) / Math.max(1, nonEmptyCells.length);
       if (avgTextLength > 36 && density < 0.7) {
@@ -279,6 +373,12 @@
           endRow,
           endCol
         });
+        if (
+          normalizedBounds.endRow - normalizedBounds.startRow + 1 < 2
+          || normalizedBounds.endCol - normalizedBounds.startCol + 1 < 2
+        ) {
+          return;
+        }
         const key = `${normalizedBounds.startRow}:${normalizedBounds.startCol}:${normalizedBounds.endRow}:${normalizedBounds.endCol}`;
         if (candidateKeys.has(key)) {
           return;
@@ -323,7 +423,7 @@
       }
     }
 
-    return pruneRedundantCandidates(candidates).sort((left, right) => {
+    return pruneCalendarLikeColumnCandidates(pruneRedundantCandidates(candidates)).sort((left, right) => {
       if (left.startRow !== right.startRow) return left.startRow - right.startRow;
       return left.startCol - right.startCol;
     });
@@ -428,7 +528,7 @@
   function isMeaningfulMarkdownCell(value: string): boolean {
     const text = String(value || "").trim();
     if (!text) return false;
-    return text !== "[MERGED←]" && text !== "[MERGED↑]";
+    return text !== "[←M←]" && text !== "[↑M↑]";
   }
 
   function applyMergeTokens(
@@ -451,7 +551,7 @@
           if (!matrix[matrixRow] || typeof matrix[matrixRow][matrixCol] === "undefined") {
             continue;
           }
-          matrix[matrixRow][matrixCol] = row === merge.startRow ? "[MERGED←]" : "[MERGED↑]";
+          matrix[matrixRow][matrixCol] = row === merge.startRow ? "[←M←]" : "[↑M↑]";
         }
       }
     }
@@ -461,6 +561,7 @@
     collectTableSeedCells,
     collectBorderSeedCells,
     pruneRedundantCandidates,
+    pruneCalendarLikeColumnCandidates,
     detectTableCandidates,
     trimTableCandidateBounds,
     matrixFromCandidate,

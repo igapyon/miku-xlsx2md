@@ -68,6 +68,7 @@
     const worksheetParserHelper = requireCoreWorksheetParser();
     const workbookLoaderHelper = requireCoreWorkbookLoader();
     const formulaResolverHelper = requireCoreFormulaResolver();
+    const markdownOptionsHelper = requireXlsx2mdMarkdownOptions();
     const formulaLegacyModule = requireXlsx2mdFormulaLegacyModule();
     const formulaAstModule = requireXlsx2mdFormulaAstModule();
     const zipIoHelper = moduleRegistry.requireModule("zipIo", "xlsx2md zip io module is not loaded");
@@ -140,6 +141,29 @@
     function resolveSpillRange(_sheetName, _ref) {
         return null;
     }
+    function setDefinedNameResolvers(scalar, range, structured) {
+        resolveDefinedNameScalarValue = scalar;
+        resolveDefinedNameRangeRef = range;
+        resolveStructuredRangeRef = structured;
+    }
+    function buildDrawingAssetDeps() {
+        return {
+            parseRelationships,
+            buildRelsPath,
+            xmlToDocument,
+            decodeXmlText,
+            getElementsByLocalName,
+            getFirstChildByLocalName,
+            getDirectChildByLocalName,
+            getTextContent,
+            colToLetters,
+            drawingHelper,
+            defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
+            defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
+            shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
+            shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
+        };
+    }
     function createWorksheetParseDeps() {
         return {
             EMPTY_BORDERS,
@@ -155,22 +179,7 @@
             parseRelationshipEntries,
             buildRelsPath,
             formatCellDisplayValue: cellFormatHelper.formatCellDisplayValue,
-            buildAssetDeps: () => ({
-                parseRelationships,
-                buildRelsPath,
-                xmlToDocument,
-                decodeXmlText,
-                getElementsByLocalName,
-                getFirstChildByLocalName,
-                getDirectChildByLocalName,
-                getTextContent,
-                colToLetters,
-                drawingHelper,
-                defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
-                defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
-                shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
-                shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
-            }),
+            buildAssetDeps: buildDrawingAssetDeps,
             lettersToCol,
             colToLetters
         };
@@ -192,11 +201,7 @@
             parseRangeAddress,
             tryResolveFormulaExpressionDetailed,
             applyResolvedFormulaValue: cellFormatHelper.applyResolvedFormulaValue,
-            setDefinedNameResolvers: (scalar, range, structured) => {
-                resolveDefinedNameScalarValue = scalar;
-                resolveDefinedNameRangeRef = range;
-                resolveStructuredRangeRef = structured;
-            }
+            setDefinedNameResolvers
         };
     }
     async function parseWorkbook(arrayBuffer, workbookName = "workbook.xlsx", options = {}) {
@@ -225,7 +230,8 @@
         unzipEntries: zipIoHelper.unzipEntries,
         parseRangeRef,
         applyMergeTokens: tableDetectorHelper.applyMergeTokens,
-        detectTableCandidates: (sheet, tableDetectionMode = "balanced") => tableDetectorHelper.detectTableCandidates(sheet, buildCellMap, undefined, tableDetectionMode),
+        detectTableCandidates: (sheet, tableDetectionMode = "balanced") => tableDetectorHelper.detectTableCandidates(sheet, buildCellMap, undefined, markdownOptionsHelper.normalizeTableDetectionMode(tableDetectionMode)),
+        markdownOptions: markdownOptionsHelper,
         extractNarrativeBlocks,
         convertSheetToMarkdown,
         convertWorkbookToMarkdownFiles,

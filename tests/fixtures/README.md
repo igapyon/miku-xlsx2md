@@ -53,7 +53,7 @@
 | `rich/rich-text-github-sample01.xlsx` | rich text / 文字装飾 | `xlsx2md-spec.md` 5, 6 | GitHub 互換の `bold / italic / strike / underline` 出力 |
 | `rich/rich-markdown-escape-sample01.xlsx` | Markdown 記号 / escape | `xlsx2md-spec.md` 5, 6 | Markdown 記号を含む文字列と rich text の混在 |
 | `rich/rich-usecase-sample01.xlsx` | rich text + hyperlink 実用例 | `xlsx2md-spec.md` 5, 6, 19 | 表セル内 rich text、外部リンク、改行、取消線つき補足文の安定出力 |
-| `merge/merge-pattern-sample01.xlsx` | 結合セル | `xlsx2md-spec.md` 13 | `[MERGED←] / [MERGED↑]` の崩れ |
+| `merge/merge-pattern-sample01.xlsx` | 結合セル | `xlsx2md-spec.md` 13 | `[←M←] / [↑M↑]` の崩れ |
 | `merge/merge-multiline-sample01.xlsx` | 結合セル内改行 | `xlsx2md-spec.md` 13 | multiline merged text の parse と Markdown 正規化 |
 | `table/table-basic-sample01.xlsx` | 隣接表(縦) | `xlsx2md-spec.md` 7, 8 | 縦に密接した独立表の誤結合 |
 | `table/table-basic-sample02.xlsx` | 隣接表(横) | `xlsx2md-spec.md` 7, 8 | 横に密接した独立表の誤結合 |
@@ -143,9 +143,9 @@
 
 - `merge-pattern-sample01.xlsx`
   - 結合セル専用
-  - 横結合、縦結合、2x2 結合と `[MERGED←] / [MERGED↑]` を確認する
+  - 横結合、縦結合、2x2 結合と `[←M←] / [↑M↑]` を確認する
   - 対応章: `xlsx2md-spec.md` 13
-  - 主に確認する症状: `[MERGED←] / [MERGED↑]` の崩れ
+  - 主に確認する症状: `[←M←] / [↑M↑]` の崩れ
 - `merge-multiline-sample01.xlsx`
   - 結合セル内改行専用
   - 2x2 結合セルの先頭セルに multiline text を入れて確認する

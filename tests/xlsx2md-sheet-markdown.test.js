@@ -1,60 +1,16 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry } from "./helpers/module-registry.js";
+import { bootSheetMarkdownModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const markdownNormalizeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-normalize.js"),
-  "utf8"
-);
-const markdownEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-escape.js"),
-  "utf8"
-);
-const markdownTableEscapeCode = readFileSync(
-  path.resolve(__dirname, "../src/js/markdown-table-escape.js"),
-  "utf8"
-);
-const richTextParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-parser.js"),
-  "utf8"
-);
-const richTextPlainFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-plain-formatter.js"),
-  "utf8"
-);
-const richTextGithubFormatterCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-github-formatter.js"),
-  "utf8"
-);
-const richTextRendererCode = readFileSync(
-  path.resolve(__dirname, "../src/js/rich-text-renderer.js"),
-  "utf8"
-);
-const sheetMarkdownCode = readFileSync(
-  path.resolve(__dirname, "../src/js/sheet-markdown.js"),
-  "utf8"
-);
-
 function bootSheetMarkdown() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  new Function(markdownNormalizeCode)();
-  new Function(markdownEscapeCode)();
-  new Function(markdownTableEscapeCode)();
-  new Function(richTextParserCode)();
-  new Function(richTextPlainFormatterCode)();
-  new Function(richTextGithubFormatterCode)();
-  new Function(richTextRendererCode)();
-  new Function(sheetMarkdownCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("sheetMarkdown");
+  return bootSheetMarkdownModule(__dirname);
 }
 
 function createDeps(overrides = {}) {
@@ -105,6 +61,30 @@ describe("xlsx2md sheet markdown", () => {
     ]);
   });
 
+  it("collects narrative cells by row and builds narrative items in row order", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      cells: [
+        { row: 2, col: 4, outputValue: "Tail", rawValue: "Tail" },
+        { row: 1, col: 1, outputValue: "Head", rawValue: "Head" },
+        { row: 2, col: 1, outputValue: "Body", rawValue: "Body" },
+        { row: 5, col: 1, outputValue: "TableCell", rawValue: "TableCell" }
+      ]
+    };
+    const tables = [{ startRow: 5, startCol: 1, endRow: 5, endCol: 1 }];
+
+    const rowMap = api.collectNarrativeCellsByRow(sheet, tables);
+    const items = api.buildNarrativeItems(workbook, sheet, tables, {});
+
+    expect(Array.from(rowMap.keys())).toEqual([2, 1]);
+    expect(items).toEqual([
+      { row: 1, startCol: 1, text: "Head", cellValues: ["Head"] },
+      { row: 2, startCol: 1, text: "Body Tail", cellValues: ["Body", "Tail"] }
+    ]);
+  });
+
   it("extracts narrative blocks outside detected tables", () => {
     const module = bootSheetMarkdown();
     const api = module.createSheetMarkdownApi(createDeps());
@@ -122,6 +102,260 @@ describe("xlsx2md sheet markdown", () => {
 
     expect(api.extractNarrativeBlocks(workbook, sheet, tables, {})).toHaveLength(1);
     expect(api.extractNarrativeBlocks(workbook, sheet, tables, {})[0].lines).toEqual(["Heading", "Detail"]);
+  });
+
+  it("groups nearby section anchors and splits distant ones", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sheet = {
+      cells: [],
+      images: [
+        { anchor: "B2", filename: "img1.png", path: "assets/img1.png", data: new Uint8Array([1]) },
+        { anchor: "D5", filename: "img2.png", path: "assets/img2.png", data: new Uint8Array([2]) },
+        { anchor: "A12", filename: "img3.png", path: "assets/img3.png", data: new Uint8Array([3]) }
+      ],
+      charts: [
+        { anchor: "C13", title: "Chart", chartType: "bar", series: [] }
+      ]
+    };
+    const tables = [
+      { startRow: 4, startCol: 1, endRow: 6, endCol: 3, score: 1, reasonSummary: ["test"] }
+    ];
+    const narrativeBlocks = [
+      {
+        startRow: 1,
+        startCol: 1,
+        endRow: 1,
+        lines: ["Intro"],
+        items: [{ row: 1, startCol: 1, text: "Intro", cellValues: ["Intro"] }]
+      }
+    ];
+
+    expect(api.extractSectionBlocks(sheet, tables, narrativeBlocks)).toEqual([
+      { startRow: 1, startCol: 1, endRow: 6, endCol: 4 },
+      { startRow: 12, startCol: 1, endRow: 13, endCol: 3 }
+    ]);
+  });
+
+  it("splits same-row section anchors when they are far apart horizontally", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sheet = {
+      cells: [],
+      images: [],
+      charts: []
+    };
+    const tables = [];
+    const narrativeBlocks = [
+      {
+        startRow: 1,
+        startCol: 1,
+        endRow: 1,
+        lines: ["イベント チェックリスト"],
+        items: [{ row: 1, startCol: 1, text: "イベント チェックリスト", cellValues: ["イベント チェックリスト"] }]
+      },
+      {
+        startRow: 1,
+        startCol: 8,
+        endRow: 1,
+        lines: ["イベント カテゴリ"],
+        items: [{ row: 1, startCol: 8, text: "イベント カテゴリ", cellValues: ["イベント カテゴリ"] }]
+      }
+    ];
+
+    expect(api.extractSectionBlocks(sheet, tables, narrativeBlocks)).toEqual([
+      { startRow: 1, startCol: 1, endRow: 1, endCol: 1 },
+      { startRow: 1, startCol: 8, endRow: 1, endCol: 8 }
+    ]);
+  });
+
+  it("keeps nearby calendar-like anchors in one section block even when horizontally separated", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sheet = {
+      cells: [],
+      images: [],
+      charts: []
+    };
+    const tables = [];
+    const narrativeBlocks = [
+      {
+        startRow: 11,
+        startCol: 3,
+        endRow: 17,
+        lines: ["2021-01-03 ..."],
+        items: [
+          { row: 11, startCol: 3, text: "2021-01-03 ...", cellValues: ["2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09"] }
+        ]
+      },
+      {
+        startRow: 24,
+        startCol: 25,
+        endRow: 30,
+        lines: ["2020-12-01 ..."],
+        items: [
+          { row: 24, startCol: 25, text: "2020-12-01 ...", cellValues: ["2020-12-01", "2020-12-02", "2020-12-03", "2020-12-04", "2020-12-05"] }
+        ]
+      }
+    ];
+
+    expect(api.extractSectionBlocks(sheet, tables, narrativeBlocks)).toEqual([
+      { startRow: 11, startCol: 3, endRow: 30, endCol: 25 }
+    ]);
+  });
+
+  it("sorts and renders grouped sections with separators only between blocks", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const sections = [
+      { sortRow: 12, sortCol: 1, markdown: "Third\n", kind: "narrative" },
+      { sortRow: 2, sortCol: 3, markdown: "Second\n", kind: "table" },
+      { sortRow: 2, sortCol: 1, markdown: "First\n", kind: "narrative" }
+    ];
+    const sectionBlocks = [
+      { startRow: 1, startCol: 1, endRow: 5, endCol: 5 },
+      { startRow: 10, startCol: 1, endRow: 15, endCol: 5 }
+    ];
+
+    api.sortContentSections(sections);
+    const grouped = api.createGroupedSections(sectionBlocks, sections);
+
+    expect(grouped).toEqual([
+      {
+        block: { startRow: 1, startCol: 1, endRow: 5, endCol: 5 },
+        entries: [
+          { sortRow: 2, sortCol: 1, markdown: "First\n", kind: "narrative" },
+          { sortRow: 2, sortCol: 3, markdown: "Second\n", kind: "table" }
+        ]
+      },
+      {
+        block: { startRow: 10, startCol: 1, endRow: 15, endCol: 5 },
+        entries: [
+          { sortRow: 12, sortCol: 1, markdown: "Third\n", kind: "narrative" }
+        ]
+      }
+    ]);
+    expect(api.renderGroupedSectionBody(grouped)).toBe("First\n\nSecond\n\n---\n\nThird");
+  });
+
+  it("reorders calendar-like grouped entries to place header and sidebar around the main block", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const header = {
+      sortRow: 2,
+      sortCol: 3,
+      markdown: "2021年1月\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 2,
+        startCol: 3,
+        endRow: 2,
+        lines: ["2021年1月"],
+        items: [{ row: 2, startCol: 3, text: "2021年1月", cellValues: ["2021年1月"] }]
+      }
+    };
+    const main = {
+      sortRow: 11,
+      sortCol: 3,
+      markdown: "2021-01-03 | 2021-01-04 | 2021-01-05 | 2021-01-06 | 2021-01-07 | 2021-01-08 | 2021-01-09\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 11,
+        startCol: 3,
+        endRow: 11,
+        lines: ["2021-01-03 ..."],
+        items: [{ row: 11, startCol: 3, text: "2021-01-03 ...", cellValues: ["2021-01-03", "2021-01-04", "2021-01-05", "2021-01-06", "2021-01-07", "2021-01-08", "2021-01-09"] }]
+      }
+    };
+    const sidebar = {
+      sortRow: 24,
+      sortCol: 25,
+      markdown: "2020-12-01\n",
+      kind: "narrative",
+      narrativeBlock: {
+        startRow: 24,
+        startCol: 25,
+        endRow: 24,
+        lines: ["2020-12-01"],
+        items: [{ row: 24, startCol: 25, text: "2020-12-01", cellValues: ["2020-12-01", "2020-12-02", "2020-12-03", "2020-12-04", "2020-12-05"] }]
+      }
+    };
+
+    const reordered = api.createCalendarAwareSectionEntries([sidebar, main, header]);
+
+    expect(reordered.map((entry) => entry.markdown.trim())).toEqual([
+      "2021年1月",
+      "2021-01-03 | 2021-01-04 | 2021-01-05 | 2021-01-06 | 2021-01-07 | 2021-01-08 | 2021-01-09",
+      "### Sidebar",
+      "2020-12-01"
+    ]);
+  });
+
+  it("renders image and chart sections with stable headings and metadata", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+
+    const imageSection = api.renderImageSection({
+      images: [
+        { anchor: "B2", filename: "image_001.png", path: "assets/Sheet1/image_001.png", data: new Uint8Array([1]) }
+      ]
+    });
+    const chartSection = api.renderChartSection([
+      {
+        anchor: "C4",
+        title: "",
+        chartType: "line",
+        series: [
+          { name: "Sales", categoriesRef: "Sheet1!A2:A5", valuesRef: "Sheet1!B2:B5", axis: "secondary" }
+        ]
+      }
+    ]);
+
+    expect(imageSection).toContain("### Image: 001 (B2)");
+    expect(imageSection).toContain("- File: assets/Sheet1/image_001.png");
+    expect(imageSection).toContain("![image_001.png](assets/Sheet1/image_001.png)");
+    expect(chartSection).toContain("### Chart: 001 (C4)");
+    expect(chartSection).toContain("- Title: (none)");
+    expect(chartSection).toContain("- Type: line");
+    expect(chartSection).toContain("- Series:");
+    expect(chartSection).toContain("  - Sales");
+    expect(chartSection).toContain("    - Axis: secondary");
+    expect(chartSection).toContain("    - categories: Sheet1!A2:A5");
+    expect(chartSection).toContain("    - values: Sheet1!B2:B5");
+  });
+
+  it("renders ungrouped shapes after grouped shape blocks", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderHierarchicalRawEntries: () => ["- kind: rect"]
+    }));
+    const shapes = [
+      {
+        anchor: "B3",
+        rawEntries: [{ key: "kind", value: "rect" }],
+        svgFilename: null,
+        svgPath: null,
+        svgData: null
+      },
+      {
+        anchor: "E8",
+        rawEntries: [{ key: "kind", value: "rect" }],
+        svgFilename: "shape_002.svg",
+        svgPath: "assets/Sheet1/shape_002.svg",
+        svgData: new Uint8Array([2])
+      }
+    ];
+    const shapeBlocks = [
+      { startRow: 3, startCol: 2, endRow: 3, endCol: 2, shapeIndexes: [0] }
+    ];
+
+    const section = api.renderShapeSection(shapes, shapeBlocks, true);
+
+    expect(section).toContain("### Shape Block: 001 (3:2-3:2)");
+    expect(section).toContain("- Shapes: Shape 001");
+    expect(section).toContain("### Ungrouped Shapes");
+    expect(section).toContain("#### Shape: 002 (E8)");
+    expect(section).toContain("![shape_002.svg](assets/Sheet1/shape_002.svg)");
   });
 
   it("converts a minimal sheet into markdown", () => {
@@ -149,6 +383,93 @@ describe("xlsx2md sheet markdown", () => {
     expect(result.markdown).toContain("# Book: book.xlsx");
     expect(result.markdown).toContain("## Sheet: Sheet1");
     expect(result.summary.narrativeBlocks).toBe(1);
+  });
+
+  it("keeps nearby calendar rows in one narrative block even when later rows shift right", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderNarrativeBlock: (block) => block.lines.join("\n")
+    }));
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [
+        { address: "A1", row: 1, col: 1, outputValue: "2021-01-03", rawValue: "2021-01-03", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "B1", row: 1, col: 2, outputValue: "2021-01-04", rawValue: "2021-01-04", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "C1", row: 1, col: 3, outputValue: "2021-01-05", rawValue: "2021-01-05", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "D1", row: 1, col: 4, outputValue: "2021-01-06", rawValue: "2021-01-06", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "E1", row: 1, col: 5, outputValue: "2021-01-07", rawValue: "2021-01-07", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "F1", row: 1, col: 6, outputValue: "2021-01-08", rawValue: "2021-01-08", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "G1", row: 1, col: 7, outputValue: "2021-01-09", rawValue: "2021-01-09", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "J2", row: 2, col: 10, outputValue: "仕事", rawValue: "仕事", formulaText: "", resolutionStatus: null, resolutionSource: null },
+        { address: "K2", row: 2, col: 11, outputValue: "私用", rawValue: "私用", formulaText: "", resolutionStatus: null, resolutionSource: null }
+      ],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const blocks = api.extractNarrativeBlocks(workbook, sheet, [], {});
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].lines).toEqual([
+      "2021-01-03 2021-01-04 2021-01-05 2021-01-06 2021-01-07 2021-01-08 2021-01-09",
+      "仕事 私用"
+    ]);
+  });
+
+  it("collects render state and uses empty-body fallback text", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps());
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const state = api.collectSheetRenderState(workbook, sheet, {});
+    const markdown = api.createSheetMarkdownText(workbook, sheet, state);
+    const summary = api.createSheetSummary(sheet, state);
+
+    expect(state.body).toBe("");
+    expect(state.groupedSections).toEqual([]);
+    expect(markdown).toContain("_No extractable body content was found._");
+    expect(summary.sections).toBe(0);
+    expect(summary.tables).toBe(0);
+    expect(summary.narrativeBlocks).toBe(0);
+  });
+
+  it("normalizes table detection compatibility aliases in core conversion", () => {
+    const detectedModes = [];
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      detectTableCandidates: (_sheet, _buildCellMap, tableDetectionMode) => {
+        detectedModes.push(tableDetectionMode);
+        return [];
+      }
+    }));
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const result = api.convertSheetToMarkdown(workbook, sheet, { tableDetectionMode: "border-priority" });
+
+    expect(detectedModes).toEqual(["border"]);
+    expect(result.summary.tableDetectionMode).toBe("border");
   });
 
   it("normalizes cell line breaks into spaces in plain mode", () => {
@@ -658,5 +979,100 @@ describe("xlsx2md sheet markdown", () => {
 
     expect(result.markdown).toContain("[Linked](https://example.com/)");
     expect(result.markdown).not.toContain("<ins>Linked</ins>");
+  });
+
+  it("uses raw values for raw output mode while preserving hyperlinks", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderNarrativeBlock: (block) => block.lines.join("\n")
+    }));
+    const workbook = {
+      name: "book.xlsx",
+      sheets: [
+        { name: "Sheet1", index: 1, cells: [], merges: [], images: [], charts: [], shapes: [] }
+      ]
+    };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [
+        {
+          address: "A1",
+          row: 1,
+          col: 1,
+          outputValue: "Displayed",
+          rawValue: "https://raw.example/",
+          formulaText: "",
+          resolutionStatus: null,
+          resolutionSource: null,
+          textStyle: { bold: false, italic: false, strike: false, underline: false },
+          richTextRuns: null,
+          hyperlink: {
+            kind: "external",
+            target: "https://example.com/",
+            location: "",
+            tooltip: "",
+            display: ""
+          }
+        }
+      ],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const result = api.convertSheetToMarkdown(workbook, sheet, { outputMode: "raw" });
+
+    expect(result.markdown).toContain("[https://raw.example/](https://example.com/)");
+    expect(result.markdown).not.toContain("[Displayed](https://example.com/)");
+  });
+
+  it("appends raw values only in both output mode when display and raw differ", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderNarrativeBlock: (block) => block.lines.join("\n")
+    }));
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [
+        {
+          address: "A1",
+          row: 1,
+          col: 1,
+          outputValue: "Displayed",
+          rawValue: "RawValue",
+          formulaText: "",
+          resolutionStatus: null,
+          resolutionSource: null,
+          textStyle: { bold: false, italic: false, strike: false, underline: false },
+          richTextRuns: null
+        },
+        {
+          address: "A2",
+          row: 2,
+          col: 1,
+          outputValue: "SameValue",
+          rawValue: "SameValue",
+          formulaText: "",
+          resolutionStatus: null,
+          resolutionSource: null,
+          textStyle: { bold: false, italic: false, strike: false, underline: false },
+          richTextRuns: null
+        }
+      ],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: []
+    };
+
+    const result = api.convertSheetToMarkdown(workbook, sheet, { outputMode: "both" });
+
+    expect(result.markdown).toContain("Displayed [raw=RawValue]");
+    expect(result.markdown).toContain("SameValue");
+    expect(result.markdown).not.toContain("SameValue [raw=SameValue]");
   });
 });

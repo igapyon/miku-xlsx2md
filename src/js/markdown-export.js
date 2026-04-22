@@ -9,11 +9,15 @@
     const textEncodingHelper = requireXlsx2mdTextEncoding();
     const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
     const markdownTableEscapeHelper = requireXlsx2mdMarkdownTableEscape();
+    const FORMULA_STATUSES = ["resolved", "fallback_formula", "unsupported_external"];
     function normalizeMarkdownLineBreaks(text) {
         return markdownNormalizeHelper.normalizeMarkdownText(text);
     }
     function escapeMarkdownCell(text) {
         return markdownTableEscapeHelper.escapeMarkdownTableCell(text);
+    }
+    function createBlankRow(columnCount) {
+        return new Array(columnCount).fill("");
     }
     function renderMarkdownTable(rows, treatFirstRowAsHeader) {
         if (rows.length === 0) {
@@ -21,9 +25,9 @@
         }
         const workingRows = rows.map((row) => row.map((cell) => escapeMarkdownCell(cell)));
         if (workingRows.length === 1 && treatFirstRowAsHeader) {
-            workingRows.push(new Array(workingRows[0].length).fill(""));
+            workingRows.push(createBlankRow(workingRows[0].length));
         }
-        const header = treatFirstRowAsHeader ? workingRows[0] : new Array(workingRows[0].length).fill("");
+        const header = treatFirstRowAsHeader ? workingRows[0] : createBlankRow(workingRows[0].length);
         const body = treatFirstRowAsHeader ? workingRows.slice(1) : workingRows;
         const lines = [
             `| ${header.join(" | ")} |`,
@@ -44,17 +48,38 @@
             .replace(/^[_ .-]+|[_ .-]+$/g, "");
         return sanitized || fallback;
     }
+    function stripWorkbookExtension(workbookName) {
+        return String(workbookName || "").replace(/\.xlsx$/i, "");
+    }
+    function createCombinedMarkdownFileName(workbookName) {
+        const baseName = stripWorkbookExtension(String(workbookName || "workbook")) || "workbook";
+        return `${baseName}.md`;
+    }
+    function createExportEntryName(relativePath) {
+        return `output/${relativePath}`;
+    }
     function createOutputFileName(workbookName, sheetIndex, sheetName, outputMode = "display", formattingMode = "plain") {
-        const bookBase = sanitizeFileNameSegment(workbookName.replace(/\.xlsx$/i, ""), "workbook");
+        const bookBase = sanitizeFileNameSegment(stripWorkbookExtension(workbookName), "workbook");
         const safeSheetName = sanitizeFileNameSegment(sheetName, `Sheet${sheetIndex}`);
         void outputMode;
         void formattingMode;
         return `${bookBase}_${String(sheetIndex).padStart(3, "0")}_${safeSheetName}.md`;
     }
+    function countFormulaStatuses(formulaDiagnostics) {
+        const counts = {
+            resolved: 0,
+            fallback_formula: 0,
+            unsupported_external: 0
+        };
+        for (const item of formulaDiagnostics) {
+            if (item.status && item.status in counts) {
+                counts[item.status] += 1;
+            }
+        }
+        return counts;
+    }
     function createSummaryText(markdownFile) {
-        const resolvedCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "resolved").length;
-        const fallbackCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "fallback_formula").length;
-        const unsupportedCount = markdownFile.summary.formulaDiagnostics.filter((item) => item.status === "unsupported_external").length;
+        const formulaCounts = countFormulaStatuses(markdownFile.summary.formulaDiagnostics);
         return [
             `Output file: ${markdownFile.fileName}`,
             `Output mode: ${markdownFile.summary.outputMode}`,
@@ -67,27 +92,28 @@
             `Images: ${markdownFile.summary.images}`,
             `Charts: ${markdownFile.summary.charts}`,
             `Analyzed cells: ${markdownFile.summary.cells}`,
-            `Formula resolved: ${resolvedCount}`,
-            `Formula fallback_formula: ${fallbackCount}`,
-            `Formula unsupported_external: ${unsupportedCount}`,
+            ...FORMULA_STATUSES.map((status) => `Formula ${status}: ${formulaCounts[status]}`),
             ...markdownFile.summary.tableScores.map((detail) => `Table candidate ${detail.range}: score ${detail.score} / ${detail.reasons.join(", ")}`)
         ].join("\n");
     }
+    function stripBookHeading(markdown, bookHeading) {
+        const lines = String(markdown || "").split("\n");
+        if (lines[0] === bookHeading) {
+            lines.shift();
+            while (lines[0] === "") {
+                lines.shift();
+            }
+        }
+        return lines.join("\n");
+    }
     function createCombinedMarkdownExportFile(workbook, markdownFiles) {
-        const fileName = `${String(workbook.name || "workbook").replace(/\.xlsx$/i, "")}.md`;
+        const fileName = createCombinedMarkdownFileName(workbook.name);
         const bookHeading = `# Book: ${String(workbook.name || "workbook.xlsx")}`;
         const content = [
             bookHeading,
-            ...markdownFiles.map((markdownFile) => {
-                const lines = String(markdownFile.markdown || "").split("\n");
-                if (lines[0] === bookHeading) {
-                    lines.shift();
-                    while (lines[0] === "") {
-                        lines.shift();
-                    }
-                }
-                return lines.join("\n");
-            }).filter((markdown) => markdown.trim().length > 0)
+            ...markdownFiles
+                .map((markdownFile) => stripBookHeading(markdownFile.markdown, bookHeading))
+                .filter((markdown) => markdown.trim().length > 0)
         ].join("\n\n");
         return { fileName, content };
     }
@@ -102,19 +128,22 @@
             mimeType: textEncodingHelper.createTextMimeType(options)
         };
     }
-    function createExportEntries(workbook, markdownFiles, options = {}) {
-        const entries = [];
-        if (markdownFiles.length > 0) {
-            const combined = createCombinedMarkdownExportPayload(workbook, markdownFiles, options);
-            entries.push({
-                name: `output/${combined.fileName}`,
-                data: combined.data
-            });
+    function createMarkdownExportEntry(workbook, markdownFiles, options = {}) {
+        if (markdownFiles.length === 0) {
+            return null;
         }
+        const combined = createCombinedMarkdownExportPayload(workbook, markdownFiles, options);
+        return {
+            name: createExportEntryName(combined.fileName),
+            data: combined.data
+        };
+    }
+    function createAssetExportEntries(workbook) {
+        const entries = [];
         for (const sheet of workbook.sheets) {
             for (const image of sheet.images) {
                 entries.push({
-                    name: `output/${image.path}`,
+                    name: createExportEntryName(image.path),
                     data: image.data
                 });
             }
@@ -122,10 +151,18 @@
                 if (!shape.svgPath || !shape.svgData)
                     continue;
                 entries.push({
-                    name: `output/${shape.svgPath}`,
+                    name: createExportEntryName(shape.svgPath),
                     data: shape.svgData
                 });
             }
+        }
+        return entries;
+    }
+    function createExportEntries(workbook, markdownFiles, options = {}) {
+        const entries = createAssetExportEntries(workbook);
+        const markdownEntry = createMarkdownExportEntry(workbook, markdownFiles, options);
+        if (markdownEntry) {
+            entries.unshift(markdownEntry);
         }
         return entries;
     }
@@ -138,9 +175,14 @@
         escapeMarkdownCell,
         renderMarkdownTable,
         sanitizeFileNameSegment,
+        stripWorkbookExtension,
+        createCombinedMarkdownFileName,
+        createExportEntryName,
         createOutputFileName,
         createSummaryText,
         createCombinedMarkdownExportFile,
+        createMarkdownExportEntry,
+        createAssetExportEntries,
         createExportEntries,
         createWorkbookExportArchive,
         normalizeMarkdownLineBreaks,

@@ -4,6 +4,36 @@
  */
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
+    function normalizeCellRect(start, end) {
+        if (!start.row || !start.col || !end.row || !end.col) {
+            return null;
+        }
+        return {
+            startRow: Math.min(start.row, end.row),
+            endRow: Math.max(start.row, end.row),
+            startCol: Math.min(start.col, end.col),
+            endCol: Math.max(start.col, end.col)
+        };
+    }
+    function getResolvedFormulaCellValue(cell) {
+        const rawValue = String(cell.rawValue || "");
+        const outputValue = String(cell.outputValue || "");
+        if (rawValue && rawValue !== cell.formulaText) {
+            return rawValue;
+        }
+        return outputValue || rawValue;
+    }
+    function getUnresolvedFormulaCellValue(cell) {
+        const rawValue = String(cell.rawValue || "");
+        const outputValue = String(cell.outputValue || "");
+        if (rawValue && rawValue !== cell.formulaText) {
+            return rawValue;
+        }
+        if (outputValue && outputValue !== cell.formulaText) {
+            return outputValue;
+        }
+        return "";
+    }
     function buildFormulaResolver(workbook, deps) {
         const sheetMap = new Map();
         const cellMaps = new Map();
@@ -71,22 +101,9 @@
             }
             if (cell.formulaText) {
                 if (cell.resolutionStatus === "resolved") {
-                    const rawValue = String(cell.rawValue || "");
-                    const outputValue = String(cell.outputValue || "");
-                    if (rawValue && rawValue !== cell.formulaText) {
-                        return rawValue;
-                    }
-                    return outputValue || rawValue;
+                    return getResolvedFormulaCellValue(cell);
                 }
-                const rawValue = String(cell.rawValue || "");
-                const outputValue = String(cell.outputValue || "");
-                if (rawValue && rawValue !== cell.formulaText) {
-                    return rawValue;
-                }
-                if (outputValue && outputValue !== cell.formulaText) {
-                    return outputValue;
-                }
-                return "";
+                return getUnresolvedFormulaCellValue(cell);
             }
             if (["s", "inlineStr", "str", "e", "b"].includes(cell.valueType)) {
                 return String(cell.outputValue || cell.rawValue || "");
@@ -98,19 +115,14 @@
             if (!range) {
                 return { rawValues: [], numericValues: [] };
             }
-            const start = deps.parseCellAddress(range.start);
-            const end = deps.parseCellAddress(range.end);
-            if (!start.row || !start.col || !end.row || !end.col) {
+            const cellRect = normalizeCellRect(deps.parseCellAddress(range.start), deps.parseCellAddress(range.end));
+            if (!cellRect) {
                 return { rawValues: [], numericValues: [] };
             }
-            const startRow = Math.min(start.row, end.row);
-            const endRow = Math.max(start.row, end.row);
-            const startCol = Math.min(start.col, end.col);
-            const endCol = Math.max(start.col, end.col);
             const rawValues = [];
             const numericValues = [];
-            for (let row = startRow; row <= endRow; row += 1) {
-                for (let col = startCol; col <= endCol; col += 1) {
+            for (let row = cellRect.startRow; row <= cellRect.endRow; row += 1) {
+                for (let col = cellRect.startCol; col <= cellRect.endCol; col += 1) {
                     const rawValue = resolveCellValue(sheetName, `${deps.colToLetters(col)}${row}`);
                     rawValues.push(rawValue);
                     if (String(rawValue || "").trim() === "")
@@ -157,23 +169,19 @@
             if (args.length < 2 || args.length > 3)
                 return null;
             const rangeRef = deps.parseQualifiedRangeReference(args[0], sheetName);
-            const rowIndex = Number(deps.resolveScalarFormulaValue(args[1], sheetName, resolveCellValue, (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues, resolveRangeEntries));
+            const resolveRangeValues = (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues;
+            const rowIndex = Number(deps.resolveScalarFormulaValue(args[1], sheetName, resolveCellValue, resolveRangeValues, resolveRangeEntries));
             const colIndex = args.length === 3
-                ? Number(deps.resolveScalarFormulaValue(args[2], sheetName, resolveCellValue, (targetSheetName, rangeText) => resolveRangeEntries(targetSheetName, rangeText).numericValues, resolveRangeEntries))
+                ? Number(deps.resolveScalarFormulaValue(args[2], sheetName, resolveCellValue, resolveRangeValues, resolveRangeEntries))
                 : 1;
             if (!rangeRef || Number.isNaN(rowIndex) || Number.isNaN(colIndex) || rowIndex < 1 || colIndex < 1)
                 return null;
-            const rangeStart = deps.parseCellAddress(rangeRef.start);
-            const rangeEnd = deps.parseCellAddress(rangeRef.end);
-            if (!rangeStart.row || !rangeStart.col || !rangeEnd.row || !rangeEnd.col)
+            const cellRect = normalizeCellRect(deps.parseCellAddress(rangeRef.start), deps.parseCellAddress(rangeRef.end));
+            if (!cellRect)
                 return null;
-            const startRow = Math.min(rangeStart.row, rangeEnd.row);
-            const endRow = Math.max(rangeStart.row, rangeEnd.row);
-            const startCol = Math.min(rangeStart.col, rangeEnd.col);
-            const endCol = Math.max(rangeStart.col, rangeEnd.col);
-            const targetRow = startRow + Math.trunc(rowIndex) - 1;
-            const targetCol = startCol + Math.trunc(colIndex) - 1;
-            if (targetRow > endRow || targetCol > endCol)
+            const targetRow = cellRect.startRow + Math.trunc(rowIndex) - 1;
+            const targetCol = cellRect.startCol + Math.trunc(colIndex) - 1;
+            if (targetRow > cellRect.endRow || targetCol > cellRect.endCol)
                 return null;
             return {
                 sheetName: startRef.sheetName,
@@ -195,15 +203,14 @@
             const columnIndex = table.columns.findIndex((columnName) => deps.normalizeStructuredTableKey(columnName) === columnKey);
             if (columnIndex < 0)
                 return null;
-            const startAddress = deps.parseCellAddress(table.start);
-            const endAddress = deps.parseCellAddress(table.end);
-            if (!startAddress.row || !startAddress.col || !endAddress.row || !endAddress.col)
+            const cellRect = normalizeCellRect(deps.parseCellAddress(table.start), deps.parseCellAddress(table.end));
+            if (!cellRect)
                 return null;
-            const firstDataRow = Math.min(startAddress.row, endAddress.row) + Math.max(0, table.headerRowCount);
-            const lastDataRow = Math.max(startAddress.row, endAddress.row) - Math.max(0, table.totalsRowCount);
+            const firstDataRow = cellRect.startRow + Math.max(0, table.headerRowCount);
+            const lastDataRow = cellRect.endRow - Math.max(0, table.totalsRowCount);
             if (firstDataRow > lastDataRow)
                 return null;
-            const col = Math.min(startAddress.col, endAddress.col) + columnIndex;
+            const col = cellRect.startCol + columnIndex;
             const colLetters = deps.colToLetters(col);
             return {
                 sheetName: table.sheetName || sheetName,

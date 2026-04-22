@@ -1,26 +1,19 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
-import { loadModuleRegistry, loadRuntimeEnv } from "./helpers/module-registry.js";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const stylesParserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/styles-parser.js"),
-  "utf8"
-);
-
 function bootStylesParser() {
-  document.body.innerHTML = "";
-  loadModuleRegistry(__dirname);
-  loadRuntimeEnv(__dirname);
-  new Function(stylesParserCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("stylesParser");
+  return bootRegisteredModule(__dirname, [
+    "src/js/runtime-env.js",
+    "src/js/styles-parser.js"
+  ], "stylesParser");
 }
 
 describe("xlsx2md styles parser", () => {

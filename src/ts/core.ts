@@ -137,6 +137,12 @@
     svgData: Uint8Array | null;
   };
 
+  type ParsedRangeRef = {
+    sheetName: string;
+    start: string;
+    end: string;
+  };
+
   type ShapeBlock = {
     startRow: number;
     startCol: number;
@@ -235,6 +241,10 @@
   };
 
   type ExportEntry = { name: string; data: Uint8Array };
+  type ResolveCellValue = (sheetName: string, address: string) => string;
+  type ResolveRangeEntries = (sheetName: string, rangeText: string) => { rawValues: string[]; numericValues: number[] };
+  type ResolveDefinedNameScalarValue = ((sheetName: string, name: string) => string | null) | null;
+  type ResolveRangeRef = ((sheetName: string, text: string) => ParsedRangeRef | null) | null;
 
   const EMPTY_BORDERS: BorderFlags = {
     top: false,
@@ -324,15 +334,16 @@
   const worksheetParserHelper = requireCoreWorksheetParser();
   const workbookLoaderHelper = requireCoreWorkbookLoader();
   const formulaResolverHelper = requireCoreFormulaResolver();
+  const markdownOptionsHelper = requireXlsx2mdMarkdownOptions();
   const formulaLegacyModule = requireXlsx2mdFormulaLegacyModule();
   const formulaAstModule = requireXlsx2mdFormulaAstModule();
   const zipIoHelper = moduleRegistry.requireModule<{
     unzipEntries: (arrayBuffer: ArrayBuffer) => Promise<Map<string, Uint8Array>>;
     createStoredZip: (entries: ExportEntry[]) => Uint8Array;
   }>("zipIo", "xlsx2md zip io module is not loaded");
-  let resolveDefinedNameScalarValue: ((sheetName: string, name: string) => string | null) | null = null;
-  let resolveDefinedNameRangeRef: ((sheetName: string, name: string) => { sheetName: string; start: string; end: string } | null) | null = null;
-  let resolveStructuredRangeRef: ((sheetName: string, text: string) => { sheetName: string; start: string; end: string } | null) | null = null;
+  let resolveDefinedNameScalarValue: ResolveDefinedNameScalarValue = null;
+  let resolveDefinedNameRangeRef: ResolveRangeRef = null;
+  let resolveStructuredRangeRef: ResolveRangeRef = null;
   const DEFAULT_CELL_WIDTH_EMU = 609600;
   const DEFAULT_CELL_HEIGHT_EMU = 190500;
   const SHAPE_BLOCK_GAP_X_EMU = DEFAULT_CELL_WIDTH_EMU * 4;
@@ -480,8 +491,8 @@
   const tryResolveFormulaExpressionWithAst = (
     expression: string,
     currentSheetName: string,
-    resolveCellValue: (sheetName: string, address: string) => string,
-    resolveRangeEntries?: (sheetName: string, rangeText: string) => { rawValues: string[]; numericValues: number[] },
+    resolveCellValue: ResolveCellValue,
+    resolveRangeEntries?: ResolveRangeEntries,
     currentAddress?: string
   ): string | null => formulaAstHelper.tryResolveFormulaExpressionWithAst(
     expression,
@@ -495,8 +506,37 @@
     currentAddress
   );
 
-  function resolveSpillRange(_sheetName: string, _ref: string): { sheetName: string; start: string; end: string } | null {
+  function resolveSpillRange(_sheetName: string, _ref: string): ParsedRangeRef | null {
     return null;
+  }
+
+  function setDefinedNameResolvers(
+    scalar: ResolveDefinedNameScalarValue,
+    range: ResolveRangeRef,
+    structured: ResolveRangeRef
+  ): void {
+    resolveDefinedNameScalarValue = scalar;
+    resolveDefinedNameRangeRef = range;
+    resolveStructuredRangeRef = structured;
+  }
+
+  function buildDrawingAssetDeps() {
+    return {
+      parseRelationships,
+      buildRelsPath,
+      xmlToDocument,
+      decodeXmlText,
+      getElementsByLocalName,
+      getFirstChildByLocalName,
+      getDirectChildByLocalName,
+      getTextContent,
+      colToLetters,
+      drawingHelper,
+      defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
+      defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
+      shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
+      shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
+    };
   }
 
   function createWorksheetParseDeps() {
@@ -514,22 +554,7 @@
       parseRelationshipEntries,
       buildRelsPath,
       formatCellDisplayValue: cellFormatHelper.formatCellDisplayValue,
-      buildAssetDeps: () => ({
-        parseRelationships,
-        buildRelsPath,
-        xmlToDocument,
-        decodeXmlText,
-        getElementsByLocalName,
-        getFirstChildByLocalName,
-        getDirectChildByLocalName,
-        getTextContent,
-        colToLetters,
-        drawingHelper,
-        defaultCellWidthEmu: DEFAULT_CELL_WIDTH_EMU,
-        defaultCellHeightEmu: DEFAULT_CELL_HEIGHT_EMU,
-        shapeBlockGapXEmu: SHAPE_BLOCK_GAP_X_EMU,
-        shapeBlockGapYEmu: SHAPE_BLOCK_GAP_Y_EMU
-      }),
+      buildAssetDeps: buildDrawingAssetDeps,
       lettersToCol,
       colToLetters
     };
@@ -552,15 +577,7 @@
       parseRangeAddress,
       tryResolveFormulaExpressionDetailed,
       applyResolvedFormulaValue: cellFormatHelper.applyResolvedFormulaValue,
-      setDefinedNameResolvers: (
-        scalar: ((sheetName: string, name: string) => string | null) | null,
-        range: ((sheetName: string, name: string) => { sheetName: string; start: string; end: string } | null) | null,
-        structured: ((sheetName: string, text: string) => { sheetName: string; start: string; end: string } | null) | null
-      ) => {
-        resolveDefinedNameScalarValue = scalar;
-        resolveDefinedNameRangeRef = range;
-        resolveStructuredRangeRef = structured;
-      }
+      setDefinedNameResolvers
     };
   }
 
@@ -604,8 +621,14 @@
     applyMergeTokens: tableDetectorHelper.applyMergeTokens,
     detectTableCandidates: (
       sheet: ParsedSheet,
-      tableDetectionMode: "balanced" | "border" = "balanced"
-    ) => tableDetectorHelper.detectTableCandidates(sheet, buildCellMap, undefined, tableDetectionMode),
+      tableDetectionMode: "balanced" | "border" | string = "balanced"
+    ) => tableDetectorHelper.detectTableCandidates(
+      sheet,
+      buildCellMap,
+      undefined,
+      markdownOptionsHelper.normalizeTableDetectionMode(tableDetectionMode)
+    ),
+    markdownOptions: markdownOptionsHelper,
     extractNarrativeBlocks,
     convertSheetToMarkdown,
     convertWorkbookToMarkdownFiles,

@@ -3,6 +3,33 @@ import path from "node:path";
 
 import { loadXlsx2mdNodeApi } from "./lib/xlsx2md-node-runtime.mjs";
 
+const SHAPE_DETAILS_MODES = ["include", "exclude"];
+const ENCODINGS = ["utf-8", "shift_jis", "utf-16le", "utf-16be", "utf-32le", "utf-32be"];
+const BOM_MODES = ["off", "on"];
+const FLAG_OPTIONS = {
+  "--help"(options) {
+    options.help = true;
+  },
+  "--include-shape-details"(options) {
+    options.includeShapeDetails = true;
+  },
+  "--no-header-row"(options) {
+    options.treatFirstRowAsHeader = false;
+  },
+  "--no-trim-text"(options) {
+    options.trimText = false;
+  },
+  "--keep-empty-rows"(options) {
+    options.removeEmptyRows = false;
+  },
+  "--keep-empty-columns"(options) {
+    options.removeEmptyColumns = false;
+  },
+  "--summary"(options) {
+    options.summary = true;
+  }
+};
+
 function printHelp() {
   console.log(`Usage:
   node scripts/miku-xlsx2md-cli.mjs <input.xlsx> [options]
@@ -30,7 +57,72 @@ Exit codes:
 `);
 }
 
-function parseArgs(argv) {
+function normalizeEnumOption(value, allowedValues, label, aliases = {}) {
+  const normalized = aliases[value] || value;
+  if (!allowedValues.includes(normalized)) {
+    throw new Error(`Invalid ${label}: ${value}`);
+  }
+  return normalized;
+}
+
+function createValueOptions(markdownOptions) {
+  return {
+    "--out": {
+      apply(options, value) {
+        options.outPath = value;
+      }
+    },
+    "--zip": {
+      apply(options, value) {
+        options.zipPath = value;
+      }
+    },
+    "--output-mode": {
+      validate: (value) => normalizeEnumOption(value, markdownOptions.OUTPUT_MODES, "output mode"),
+      apply(options, value) {
+        options.outputMode = value;
+      }
+    },
+    "--formatting-mode": {
+      validate: (value) => normalizeEnumOption(value, markdownOptions.FORMATTING_MODES, "formatting mode"),
+      apply(options, value) {
+        options.formattingMode = value;
+      }
+    },
+    "--table-detection-mode": {
+      validate: (value) => normalizeEnumOption(
+        value,
+        markdownOptions.TABLE_DETECTION_MODES,
+        "table detection mode",
+        markdownOptions.TABLE_DETECTION_MODE_ALIASES
+      ),
+      apply(options, value) {
+        options.tableDetectionMode = value;
+      }
+    },
+    "--shape-details": {
+      validate: (value) => normalizeEnumOption(value, SHAPE_DETAILS_MODES, "shape details mode"),
+      apply(options, value) {
+        options.includeShapeDetails = value === "include";
+      }
+    },
+    "--encoding": {
+      validate: (value) => normalizeEnumOption(value, ENCODINGS, "encoding"),
+      apply(options, value) {
+        options.encoding = value;
+      }
+    },
+    "--bom": {
+      validate: (value) => normalizeEnumOption(value, BOM_MODES, "BOM mode"),
+      apply(options, value) {
+        options.bom = value;
+      }
+    }
+  };
+}
+
+function parseArgs(argv, markdownOptions) {
+  const valueOptions = createValueOptions(markdownOptions);
   const options = {
     treatFirstRowAsHeader: true,
     trimText: true,
@@ -55,78 +147,23 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === "--help") {
-      options.help = true;
+    const flagHandler = FLAG_OPTIONS[arg];
+    if (flagHandler) {
+      flagHandler(options);
       continue;
     }
-    if (arg === "--include-shape-details") {
-      options.includeShapeDetails = true;
-      continue;
-    }
-    if (arg === "--no-header-row") {
-      options.treatFirstRowAsHeader = false;
-      continue;
-    }
-    if (arg === "--no-trim-text") {
-      options.trimText = false;
-      continue;
-    }
-    if (arg === "--keep-empty-rows") {
-      options.removeEmptyRows = false;
-      continue;
-    }
-    if (arg === "--keep-empty-columns") {
-      options.removeEmptyColumns = false;
-      continue;
-    }
-    if (arg === "--summary") {
-      options.summary = true;
-      continue;
-    }
-    if (arg === "--out" || arg === "--zip" || arg === "--output-mode" || arg === "--formatting-mode" || arg === "--shape-details" || arg === "--table-detection-mode" || arg === "--encoding" || arg === "--bom") {
+
+    const optionDefinition = valueOptions[arg];
+    if (optionDefinition) {
       const value = argv[index + 1];
       if (!value) {
         throw new Error(`Missing value for ${arg}`);
       }
       index += 1;
-      if (arg === "--out") options.outPath = value;
-      if (arg === "--zip") options.zipPath = value;
-      if (arg === "--output-mode") {
-        if (value !== "display" && value !== "raw" && value !== "both") {
-          throw new Error(`Invalid output mode: ${value}`);
-        }
-        options.outputMode = value;
-      }
-      if (arg === "--formatting-mode") {
-        if (value !== "plain" && value !== "github") {
-          throw new Error(`Invalid formatting mode: ${value}`);
-        }
-        options.formattingMode = value;
-      }
-      if (arg === "--table-detection-mode") {
-        if (value !== "balanced" && value !== "border" && value !== "border-priority") {
-          throw new Error(`Invalid table detection mode: ${value}`);
-        }
-        options.tableDetectionMode = value === "border-priority" ? "border" : value;
-      }
-      if (arg === "--shape-details") {
-        if (value !== "include" && value !== "exclude") {
-          throw new Error(`Invalid shape details mode: ${value}`);
-        }
-        options.includeShapeDetails = value === "include";
-      }
-      if (arg === "--encoding") {
-        if (!["utf-8", "shift_jis", "utf-16le", "utf-16be", "utf-32le", "utf-32be"].includes(value)) {
-          throw new Error(`Invalid encoding: ${value}`);
-        }
-        options.encoding = value;
-      }
-      if (arg === "--bom") {
-        if (value !== "off" && value !== "on") {
-          throw new Error(`Invalid BOM mode: ${value}`);
-        }
-        options.bom = value;
-      }
+      const normalizedValue = typeof optionDefinition.validate === "function"
+        ? optionDefinition.validate(value)
+        : value;
+      optionDefinition.apply(options, normalizedValue);
       continue;
     }
 
@@ -166,13 +203,13 @@ function printWorkbookSummary(api, workbookName, files) {
 }
 
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
+  const api = loadXlsx2mdNodeApi();
+  const options = parseArgs(process.argv.slice(2), api.markdownOptions);
   if (options.help || !options.inputPath) {
     printHelp();
     process.exit(options.help ? 0 : 1);
   }
 
-  const api = loadXlsx2mdNodeApi();
   const inputPath = path.resolve(options.inputPath);
 
   try {

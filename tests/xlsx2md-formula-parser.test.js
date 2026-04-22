@@ -1,44 +1,21 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { bootRegisteredModule } from "./helpers/xlsx2md-js-loader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const tokenizerCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula/tokenizer.js"),
-  "utf8"
-);
-const moduleRegistryCode = readFileSync(
-  path.resolve(__dirname, "../src/js/module-registry.js"),
-  "utf8"
-);
-const moduleRegistryAccessCode = readFileSync(
-  path.resolve(__dirname, "../src/js/module-registry-access.js"),
-  "utf8"
-);
-const parserCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula/parser.js"),
-  "utf8"
-);
-const evaluatorCode = readFileSync(
-  path.resolve(__dirname, "../src/js/formula/evaluator.js"),
-  "utf8"
-);
-
 function bootFormulaParser() {
-  document.body.innerHTML = "";
-  new Function(moduleRegistryCode)();
-  new Function(moduleRegistryAccessCode)();
   delete globalThis.__xlsx2mdFormula;
-  new Function(tokenizerCode)();
-  new Function(parserCode)();
-  new Function(evaluatorCode)();
-  return globalThis.__xlsx2mdModuleRegistry.getModule("formulaRuntime");
+  return bootRegisteredModule(__dirname, [
+    "src/js/formula/tokenizer.js",
+    "src/js/formula/parser.js",
+    "src/js/formula/evaluator.js"
+  ], "formulaRuntime");
 }
 
 describe("xlsx2md formula parser", () => {

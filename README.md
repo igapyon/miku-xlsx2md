@@ -4,6 +4,11 @@
 
 miku-xlsx2md is one of the tools in Mikuku's software series.
 
+Links:
+
+- Web app: <https://igapyon.github.io/miku-xlsx2md/>
+- Repository: <https://github.com/igapyon/miku-xlsx2md>
+
 ## What is this?
 
 `miku-xlsx2md` is a single-file web app that reads Excel (`.xlsx`) files locally and extracts prose, tables, and images as Markdown.
@@ -58,6 +63,13 @@ miku-xlsx2md is one of the tools in Mikuku's software series.
 - Process an entire workbook without manual work on each sheet
 - Handle sensitive files locally without uploading them to a server
 - Use the tool in a browser without installing additional applications
+
+## Current Status
+
+- `display / raw / both`, `plain / github`, and `balanced / border` are implemented in both the browser UI and the Node.js CLI
+- Output `encoding` / `bom` switching is implemented for Markdown export and ZIP export
+- Layout-heavy sheets are handled with lightweight section grouping, but calendar / board / dashboard style sheets still have room for improvement
+- Markdown escaping, formula coverage, and layout interpretation continue to be refined incrementally
 
 ## How to use
 
@@ -210,6 +222,11 @@ The generated Markdown can then be previewed as a readable document.
 
 `miku-xlsx2md` は Mikuku's software series を構成するツールのひとつです。
 
+リンク:
+
+- Web app: <https://igapyon.github.io/miku-xlsx2md/>
+- Repository: <https://github.com/igapyon/miku-xlsx2md>
+
 `miku-xlsx2md` は、Excel (`.xlsx`) をローカルで読み込み、地の文・表・画像を Markdown として抽出する Single-file Web App です。
 
 - ブラウザ内でローカルに動作し、サーバ通信を行いません
@@ -351,6 +368,7 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-s
 - `balanced` は従来どおりの表検出モードです
 - `border` は非罫線ベースの誤検知が辛いシート向けの表検出モードです
 - 内部的には `markdown escape -> rich text parser -> plain/github formatter -> table escape` の段階分離を進めています
+- レイアウト中心シートでは、縦ギャップを使った軽量な section grouping を実装済みですが、専用の意味分解は今後の改善対象です
 - Markdown 記号を含む生文字の escape は段階的に整理中です。現状の設計メモは [docs/rich-text-markdown-rendering.md](./docs/rich-text-markdown-rendering.md) を参照してください
 
 ## Tech Stack

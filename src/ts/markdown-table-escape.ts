@@ -8,9 +8,7 @@
   const markdownNormalizeHelper = requireXlsx2mdMarkdownNormalize();
 
   function escapeMarkdownTableCell(text: string): string {
-    return markdownNormalizeHelper.escapeMarkdownPipes(
-      markdownNormalizeHelper.normalizeMarkdownText(text)
-    );
+    return markdownNormalizeHelper.normalizeMarkdownTableCell(text);
   }
 
   const markdownTableEscapeApi = {
