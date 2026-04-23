@@ -46,11 +46,11 @@
   type MarkdownOptionsApi = {
     OUTPUT_MODES: readonly ["display", "raw", "both"];
     FORMATTING_MODES: readonly ["plain", "github"];
-    TABLE_DETECTION_MODES: readonly ["balanced", "border"];
-    TABLE_DETECTION_MODE_ALIASES: Record<string, "balanced" | "border">;
+    TABLE_DETECTION_MODES: readonly ["balanced", "border", "planner-aware"];
+    TABLE_DETECTION_MODE_ALIASES: Record<string, "balanced" | "border" | "planner-aware">;
     normalizeOutputMode: (value?: string | null) => "display" | "raw" | "both";
     normalizeFormattingMode: (value?: string | null) => "plain" | "github";
-    normalizeTableDetectionMode: (value?: string | null) => "balanced" | "border";
+    normalizeTableDetectionMode: (value?: string | null) => "balanced" | "border" | "planner-aware";
     resolveMarkdownOptions: (options?: {
       treatFirstRowAsHeader?: boolean;
       trimText?: boolean;
@@ -59,7 +59,7 @@
       includeShapeDetails?: boolean;
       outputMode?: "display" | "raw" | "both" | string;
       formattingMode?: "plain" | "github" | string;
-      tableDetectionMode?: "balanced" | "border" | string;
+      tableDetectionMode?: "balanced" | "border" | "planner-aware" | string;
     }) => {
       treatFirstRowAsHeader: boolean;
       trimText: boolean;
@@ -68,7 +68,7 @@
       includeShapeDetails: boolean;
       outputMode: "display" | "raw" | "both";
       formattingMode: "plain" | "github";
-      tableDetectionMode: "balanced" | "border";
+      tableDetectionMode: "balanced" | "border" | "planner-aware";
     };
   };
   type Xlsx2mdRichTextParserModule<TCell> = {
@@ -226,7 +226,7 @@
         prosePenalty: number;
         threshold: number;
       },
-      tableDetectionMode?: "balanced" | "border"
+      tableDetectionMode?: "balanced" | "border" | "planner-aware"
     ) => TCandidate[];
     matrixFromCandidate: (
       sheet: TSheet,

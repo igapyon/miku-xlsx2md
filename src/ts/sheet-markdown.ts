@@ -143,7 +143,7 @@
     includeShapeDetails?: boolean;
     outputMode?: "display" | "raw" | "both";
     formattingMode?: "plain" | "github";
-    tableDetectionMode?: "balanced" | "border";
+    tableDetectionMode?: "balanced" | "border" | "planner-aware";
   };
 
   type TableCandidate = {
@@ -223,7 +223,7 @@
     summary: {
       outputMode: "display" | "raw" | "both";
       formattingMode: "plain" | "github";
-      tableDetectionMode: "balanced" | "border";
+      tableDetectionMode: "balanced" | "border" | "planner-aware";
       sections: number;
       tables: number;
       narrativeBlocks: number;
@@ -251,7 +251,7 @@
     detectTableCandidates: (
       sheet: ParsedSheet,
       buildCellMap: (sheet: ParsedSheet) => Map<string, ParsedCell>,
-      tableDetectionMode?: "balanced" | "border"
+      tableDetectionMode?: "balanced" | "border" | "planner-aware"
     ) => TableCandidate[];
     matrixFromCandidate: (
       sheet: ParsedSheet,

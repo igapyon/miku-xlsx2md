@@ -76,11 +76,12 @@ limitations under the License.
                 ]
               </script>
             </lht-select-help>
-            <lht-select-help field-id="tableDetectionModeSelect" label="Table Detection" help-text="Choose how aggressively miku-xlsx2md detects tables. `border` detects tables from bordered regions and reduces borderless fallback detection.">
+            <lht-select-help field-id="tableDetectionModeSelect" label="Table Detection" help-text="Choose how aggressively miku-xlsx2md detects tables. `border` trusts bordered regions, while `planner-aware` adds planner/calendar-specific suppression heuristics.">
               <script type="application/json" slot="options">
                 [
                   { "value": "balanced", "label": "balanced: bordered + fallback detection", "selected": true },
-                  { "value": "border", "label": "border: bordered regions only" }
+                  { "value": "border", "label": "border: bordered regions only" },
+                  { "value": "planner-aware", "label": "planner-aware: layout-heavy planner heuristics" }
                 ]
               </script>
             </lht-select-help>
@@ -125,7 +126,7 @@ limitations under the License.
             <lht-switch-help switch-id="removeEmptyColumnsEnabled" label="Remove empty columns" help-label="About empty-column removal" checked>
               Remove empty columns from detected tables where possible.
             </lht-switch-help>
-            <lht-switch-help switch-id="includeShapeDetailsEnabled" label="Include shape details in Markdown" help-label="About shape details" checked>
+            <lht-switch-help switch-id="includeShapeDetailsEnabled" label="Include shape details in Markdown" help-label="About shape details">
               Include Shape Blocks and Shapes sections in the generated Markdown output.
             </lht-switch-help>
           </div>
@@ -211,6 +212,7 @@ limitations under the License.
   <script src="src/js/markdown-escape.js"></script>
   <script src="src/js/markdown-table-escape.js"></script>
   <script src="src/js/text-encoding.js"></script>
+  <script src="src/js/markdown-options.js"></script>
   <script src="src/js/rich-text-parser.js"></script>
   <script src="src/js/rich-text-plain-formatter.js"></script>
   <script src="src/js/rich-text-github-formatter.js"></script>

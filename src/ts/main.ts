@@ -12,7 +12,7 @@
     includeShapeDetails: boolean;
     outputMode: "display" | "raw" | "both";
     formattingMode: "plain" | "github";
-    tableDetectionMode: "balanced" | "border";
+    tableDetectionMode: "balanced" | "border" | "planner-aware";
   };
   type MarkdownEncoding = "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be";
   type MarkdownBomMode = "off" | "on";
@@ -28,7 +28,7 @@
     summary: {
       outputMode: "display" | "raw" | "both";
       formattingMode: "plain" | "github";
-      tableDetectionMode: "balanced" | "border";
+      tableDetectionMode: "balanced" | "border" | "planner-aware";
       tables: number;
       narrativeBlocks: number;
       merges: number;
@@ -362,8 +362,12 @@
     notice.textContent = "`plain` strips Excel text emphasis and outputs plain Markdown text.";
   }
 
-  function updateTableDetectionModeNotice(mode: "balanced" | "border"): void {
+  function updateTableDetectionModeNotice(mode: "balanced" | "border" | "planner-aware"): void {
     const notice = getElement<HTMLElement>("tableDetectionModeNotice");
+    if (mode === "planner-aware") {
+      notice.textContent = "`planner-aware` adds planner/calendar-specific suppression heuristics for layout-heavy sheets.";
+      return;
+    }
     if (mode === "border") {
       notice.textContent = "`border` detects tables from bordered regions and suppresses borderless fallback detection.";
       return;

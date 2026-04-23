@@ -66,7 +66,7 @@ Links:
 
 ## Current Status
 
-- `display / raw / both`, `plain / github`, and `balanced / border` are implemented in both the browser UI and the Node.js CLI
+- `display / raw / both`, `plain / github`, and `balanced / border / planner-aware` are implemented in both the browser UI and the Node.js CLI
 - Output `encoding` / `bom` switching is implemented for Markdown export and ZIP export
 - Layout-heavy sheets are handled with lightweight section grouping, but calendar / board / dashboard style sheets still have room for improvement
 - Markdown escaping, formula coverage, and layout interpretation continue to be refined incrementally
@@ -86,6 +86,7 @@ Default save names are `workbook.md` for Markdown and `workbook.zip` for ZIP, ba
 You can also run the conversion in batch mode from Node.js.
 The CLI intentionally stays small in the Unix style: one input workbook at a time, with Markdown or ZIP written to a file.
 CLI interface may change.
+Defaults are aligned with the browser GUI: `display`, `github`, `balanced`, and shape details `exclude`.
 
 Options:
 
@@ -93,7 +94,7 @@ Options:
 - `--zip <file>`: Write ZIP export to a file
 - `--output-mode <mode>`: `display`, `raw`, or `both`
 - `--formatting-mode <mode>`: `plain` or `github`
-- `--table-detection-mode <mode>`: `balanced` or `border`
+- `--table-detection-mode <mode>`: `balanced`, `border`, or `planner-aware`
 - `--encoding <value>`: `utf-8`, `shift_jis`, `utf-16le`, `utf-16be`, `utf-32le`, or `utf-32be`
 - `--bom <value>`: `off` or `on`
 - `--shape-details <mode>`: `include` or `exclude`
@@ -134,7 +135,7 @@ You can also switch how Excel text emphasis is rendered. `github` formatting mod
 npm run cli -- ./tests/fixtures/rich/rich-text-github-sample01.xlsx --formatting-mode github
 ```
 
-You can also switch table detection behavior. `balanced` keeps the existing heuristic, while `border` detects tables from bordered regions and suppresses borderless fallback detection.
+You can also switch table detection behavior. `balanced` keeps the generic heuristic, `border` detects tables from bordered regions and suppresses borderless fallback detection, and `planner-aware` adds planner/calendar-specific suppression heuristics for layout-heavy sheets.
 
 ```bash
 npm run cli -- ./tests/fixtures/table/table-border-priority-sample01.xlsx --table-detection-mode border
@@ -295,6 +296,7 @@ The generated Markdown can then be previewed as a readable document.
 Node.js からバッチ実行することもできます。
 CLI は UNIX 的に小さく保つ方針で、基本は 1 回につき 1 つのワークブックを受け取り、Markdown または ZIP をファイルへ出力します。
 CLI interface may change.
+既定値は GUI と揃えてあり、`display` / `github` / `balanced` / shape details `exclude` です。
 
 オプション一覧:
 
@@ -302,7 +304,7 @@ CLI interface may change.
 - `--zip <file>`: ZIP をファイルへ出力
 - `--output-mode <mode>`: `display` / `raw` / `both`
 - `--formatting-mode <mode>`: `plain` / `github`
-- `--table-detection-mode <mode>`: `balanced` / `border`
+- `--table-detection-mode <mode>`: `balanced` / `border` / `planner-aware`
 - `--encoding <value>`: `utf-8` / `shift_jis` / `utf-16le` / `utf-16be` / `utf-32le` / `utf-32be`
 - `--bom <value>`: `off` / `on`
 - `--shape-details <mode>`: `include` / `exclude`
@@ -343,7 +345,7 @@ Excel の文字装飾の出し方も切り替えられます。`github` formatti
 npm run cli -- ./tests/fixtures/rich/rich-text-github-sample01.xlsx --formatting-mode github
 ```
 
-表検出の挙動も切り替えられます。`balanced` は既定のヒューリスティックを維持し、`border` は罫線のある領域からだけ表を検出し、borderless fallback 検知を抑えます。
+表検出の挙動も切り替えられます。`balanced` は汎用ヒューリスティックを維持し、`border` は罫線のある領域からだけ表を検出し、`planner-aware` は planner / calendar 系のレイアウト向け抑制ヒューリスティックを追加します。
 
 ```bash
 npm run cli -- ./tests/fixtures/table/table-border-priority-sample01.xlsx --table-detection-mode border
