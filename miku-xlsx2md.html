@@ -1550,11 +1550,12 @@ lht-preview-output {
                 ]
               </script>
             </lht-select-help>
-            <lht-select-help field-id="tableDetectionModeSelect" label="Table Detection" help-text="Choose how aggressively miku-xlsx2md detects tables. `border` detects tables from bordered regions and reduces borderless fallback detection.">
+            <lht-select-help field-id="tableDetectionModeSelect" label="Table Detection" help-text="Choose how aggressively miku-xlsx2md detects tables. `border` trusts bordered regions, while `planner-aware` adds planner/calendar-specific suppression heuristics.">
               <script type="application/json" slot="options">
                 [
                   { "value": "balanced", "label": "balanced: bordered + fallback detection", "selected": true },
-                  { "value": "border", "label": "border: bordered regions only" }
+                  { "value": "border", "label": "border: bordered regions only" },
+                  { "value": "planner-aware", "label": "planner-aware: layout-heavy planner heuristics" }
                 ]
               </script>
             </lht-select-help>
@@ -1599,7 +1600,7 @@ lht-preview-output {
             <lht-switch-help switch-id="removeEmptyColumnsEnabled" label="Remove empty columns" help-label="About empty-column removal" checked>
               Remove empty columns from detected tables where possible.
             </lht-switch-help>
-            <lht-switch-help switch-id="includeShapeDetailsEnabled" label="Include shape details in Markdown" help-label="About shape details" checked>
+            <lht-switch-help switch-id="includeShapeDetailsEnabled" label="Include shape details in Markdown" help-label="About shape details">
               Include Shape Blocks and Shapes sections in the generated Markdown output.
             </lht-switch-help>
           </div>
@@ -1675,6 +1676,7 @@ lht-preview-output {
     </section>
   </main>
 
+  
   
   
   
@@ -4804,6 +4806,66 @@ if (!customElements.get("lht-page-menu")) {
  */
 (() => {
     const moduleRegistry = getXlsx2mdModuleRegistry();
+    const OUTPUT_MODES = ["display", "raw", "both"];
+    const FORMATTING_MODES = ["plain", "github"];
+    const TABLE_DETECTION_MODES = ["balanced", "border", "planner-aware"];
+    const TABLE_DETECTION_MODE_ALIASES = {
+        "border-priority": "border"
+    };
+    function normalizeEnum(value, allowedValues, fallback, aliases = {}) {
+        const normalizedInput = String(value || "").trim().toLowerCase();
+        if (!normalizedInput) {
+            return fallback;
+        }
+        const normalizedValue = aliases[normalizedInput] || normalizedInput;
+        return allowedValues.includes(normalizedValue)
+            ? normalizedValue
+            : fallback;
+    }
+    function resolveBoolean(value, fallback) {
+        return value === undefined || value === null ? fallback : value !== false;
+    }
+    function normalizeOutputMode(value) {
+        return normalizeEnum(value, OUTPUT_MODES, "display");
+    }
+    function normalizeFormattingMode(value) {
+        return normalizeEnum(value, FORMATTING_MODES, "plain");
+    }
+    function normalizeTableDetectionMode(value) {
+        return normalizeEnum(value, TABLE_DETECTION_MODES, "balanced", TABLE_DETECTION_MODE_ALIASES);
+    }
+    function resolveMarkdownOptions(options = {}) {
+        return {
+            treatFirstRowAsHeader: resolveBoolean(options.treatFirstRowAsHeader, true),
+            trimText: resolveBoolean(options.trimText, true),
+            removeEmptyRows: resolveBoolean(options.removeEmptyRows, true),
+            removeEmptyColumns: resolveBoolean(options.removeEmptyColumns, true),
+            includeShapeDetails: resolveBoolean(options.includeShapeDetails, true),
+            outputMode: normalizeOutputMode(options.outputMode),
+            formattingMode: normalizeFormattingMode(options.formattingMode),
+            tableDetectionMode: normalizeTableDetectionMode(options.tableDetectionMode)
+        };
+    }
+    moduleRegistry.registerModule("markdownOptions", {
+        OUTPUT_MODES,
+        FORMATTING_MODES,
+        TABLE_DETECTION_MODES,
+        TABLE_DETECTION_MODE_ALIASES,
+        normalizeOutputMode,
+        normalizeFormattingMode,
+        normalizeTableDetectionMode,
+        resolveMarkdownOptions
+    });
+})();
+  </script>
+
+  <script>
+/*
+ * Copyright 2026 Toshiki Iga
+ * SPDX-License-Identifier: Apache-2.0
+ */
+(() => {
+    const moduleRegistry = getXlsx2mdModuleRegistry();
     function createRichTextParserApi(deps = {}) {
         const markdownEscapeHelper = requireXlsx2mdMarkdownEscape();
         const normalizeInlineText = deps.normalizeMarkdownText || ((text) => String(text || "").replace(/\r\n?|\n/g, " ").replace(/\t/g, " "));
@@ -5090,9 +5152,62 @@ if (!customElements.get("lht-page-menu")) {
     function isIndentedChildItem(parent, child) {
         return !!(parent && child && child.startCol > parent.startCol);
     }
+    function isWeekdayToken(value) {
+        const normalized = String(value || "").trim();
+        return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+    }
+    function isIsoDateToken(value) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+    }
+    function isCalendarLikeItem(item) {
+        if (!item || !Array.isArray(item.cellValues)) {
+            return false;
+        }
+        const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+        if (values.length < 5) {
+            return false;
+        }
+        const weekdayCount = values.filter(isWeekdayToken).length;
+        const dateCount = values.filter(isIsoDateToken).length;
+        return weekdayCount >= 5 || dateCount >= 5 || values.length >= 7;
+    }
+    function isCalendarLikeNarrativeBlock(block) {
+        if (!block.items || block.items.length < 2) {
+            return false;
+        }
+        const calendarLikeItems = block.items.filter((item) => isCalendarLikeItem(item));
+        return calendarLikeItems.length >= 2;
+    }
+    function renderCalendarLikeItem(item) {
+        const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+        if (values.length === 0) {
+            return normalizeNarrativeText(item.text);
+        }
+        if (values.every(isWeekdayToken)) {
+            return formatNarrativeHeading(values.join(" "));
+        }
+        if (values.every((value) => isIsoDateToken(value) || isWeekdayToken(value))) {
+            return values.join(" | ");
+        }
+        return values.join(" | ");
+    }
+    function renderCalendarLikeNarrativeBlock(block) {
+        return block.items
+            .map((item) => {
+            const values = item.cellValues.map((value) => String(value || "").trim()).filter(Boolean);
+            if (isCalendarLikeItem(item) || values.length >= 2) {
+                return renderCalendarLikeItem(item);
+            }
+            return normalizeNarrativeText(item.text);
+        })
+            .join("\n\n");
+    }
     function renderNarrativeBlock(block) {
         if (!block.items || block.items.length === 0) {
             return block.lines.map((line) => normalizeNarrativeText(line)).join("\n");
+        }
+        if (isCalendarLikeNarrativeBlock(block)) {
+            return renderCalendarLikeNarrativeBlock(block);
         }
         const parts = [];
         let index = 0;
@@ -5127,7 +5242,8 @@ if (!customElements.get("lht-page-menu")) {
     }
     const narrativeStructureApi = {
         renderNarrativeBlock,
-        isSectionHeadingNarrativeBlock
+        isSectionHeadingNarrativeBlock,
+        isCalendarLikeNarrativeBlock
     };
     moduleRegistry.registerModule("narrativeStructure", narrativeStructureApi);
 })();
@@ -5250,12 +5366,70 @@ if (!customElements.get("lht-page-menu")) {
             return true;
         });
     }
+    function pruneCalendarLikeColumnCandidates(candidates) {
+        const dropKeys = new Set();
+        const sorted = [...candidates].sort((left, right) => {
+            if (left.startRow !== right.startRow)
+                return left.startRow - right.startRow;
+            if (left.endRow !== right.endRow)
+                return left.endRow - right.endRow;
+            return left.startCol - right.startCol;
+        });
+        let cluster = [];
+        function flushCluster() {
+            if (cluster.length < 3) {
+                cluster = [];
+                return;
+            }
+            for (const candidate of cluster) {
+                dropKeys.add(`${candidate.startRow}:${candidate.startCol}:${candidate.endRow}:${candidate.endCol}`);
+            }
+            cluster = [];
+        }
+        function isCalendarLikeColumn(candidate) {
+            const rowCount = candidate.endRow - candidate.startRow + 1;
+            const colCount = candidate.endCol - candidate.startCol + 1;
+            return rowCount >= 4 && colCount <= 3;
+        }
+        for (const candidate of sorted) {
+            if (!isCalendarLikeColumn(candidate)) {
+                flushCluster();
+                continue;
+            }
+            const previous = cluster[cluster.length - 1];
+            if (!previous) {
+                cluster.push(candidate);
+                continue;
+            }
+            const sameBand = candidate.startRow === previous.startRow && candidate.endRow === previous.endRow;
+            const horizontalGap = candidate.startCol - previous.endCol;
+            if (sameBand && horizontalGap >= 1 && horizontalGap <= 2) {
+                cluster.push(candidate);
+            }
+            else {
+                flushCluster();
+                cluster.push(candidate);
+            }
+        }
+        flushCluster();
+        return candidates.filter((candidate) => !dropKeys.has(`${candidate.startRow}:${candidate.startCol}:${candidate.endRow}:${candidate.endCol}`));
+    }
     function detectTableCandidates(sheet, buildCellMap, scoreWeights = DEFAULT_TABLE_SCORE_WEIGHTS, tableDetectionMode = "balanced") {
         const cellMap = buildCellMap(sheet);
         const allSeedCells = collectTableSeedCells(sheet);
         const borderSeedCells = collectBorderSeedCells(sheet);
         const candidates = [];
         const candidateKeys = new Set();
+        function countSparseRows(component, startRow, endRow) {
+            let sparseRows = 0;
+            for (let row = startRow; row <= endRow; row += 1) {
+                const nonEmptyCount = component.filter((entry) => entry.row === row && entry.outputValue.trim()).length;
+                if (nonEmptyCount <= 2) {
+                    sparseRows += 1;
+                }
+            }
+            return sparseRows;
+        }
         function maybePushCandidate(component, sourceKind = "border") {
             const rows = component.map((entry) => entry.row);
             const cols = component.map((entry) => entry.col);
@@ -5267,6 +5441,8 @@ if (!customElements.get("lht-page-menu")) {
             const density = component.filter((entry) => entry.outputValue.trim()).length / area;
             const rowCount = endRow - startRow + 1;
             const colCount = endCol - startCol + 1;
+            const sparseRowCount = countSparseRows(component, startRow, endRow);
+            const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
             if (rowCount < 2 || colCount < 2) {
                 return;
             }
@@ -5305,15 +5481,45 @@ if (!customElements.get("lht-page-menu")) {
                 score += scoreWeights.mergeHeavyPenalty;
                 reasons.push(`Many merged cells (${scoreWeights.mergeHeavyPenalty})`);
             }
+            const plannerAwareMode = tableDetectionMode === "planner-aware";
             if (sourceKind === "border") {
+                const looksLikeTinyMergedLabelStub = (rowCount <= 2
+                    && colCount <= 2
+                    && mergedArea >= 1
+                    && nonEmptyCells.length <= 2
+                    && headerishCount <= 1);
+                if (looksLikeTinyMergedLabelStub) {
+                    return;
+                }
                 if (mergedArea >= 2 && density < 0.25 && headerishCount < 2) {
                     return;
                 }
+                if (plannerAwareMode) {
+                    const looksLikeWideSparseMergeForm = (colCount >= 8
+                        && rowCount >= 4
+                        && density < 0.45
+                        && mergedArea >= Math.max(4, rowCount - 1)
+                        && sparseRowCount >= Math.ceil(rowCount * 0.7));
+                    if (looksLikeWideSparseMergeForm) {
+                        return;
+                    }
+                }
             }
-            else if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
-                return;
+            else {
+                if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
+                    return;
+                }
+                if (plannerAwareMode) {
+                    const looksLikeMixedLayoutSheet = (rowCount >= 20
+                        && colCount >= 8
+                        && mergedArea >= 4
+                        && sparseRowCount >= 4
+                        && density < 0.8);
+                    if (looksLikeMixedLayoutSheet) {
+                        return;
+                    }
+                }
             }
-            const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
             const avgTextLength = nonEmptyCells
                 .reduce((sum, entry) => sum + entry.outputValue.trim().length, 0) / Math.max(1, nonEmptyCells.length);
             if (avgTextLength > 36 && density < 0.7) {
@@ -5327,6 +5533,10 @@ if (!customElements.get("lht-page-menu")) {
                     endRow,
                     endCol
                 });
+                if (normalizedBounds.endRow - normalizedBounds.startRow + 1 < 2
+                    || normalizedBounds.endCol - normalizedBounds.startCol + 1 < 2) {
+                    return;
+                }
                 const key = `${normalizedBounds.startRow}:${normalizedBounds.startCol}:${normalizedBounds.endRow}:${normalizedBounds.endCol}`;
                 if (candidateKeys.has(key)) {
                     return;
@@ -5366,7 +5576,11 @@ if (!customElements.get("lht-page-menu")) {
                 maybePushCandidate(component, "fallback");
             }
         }
-        return pruneRedundantCandidates(candidates).sort((left, right) => {
+        const prunedCandidates = pruneRedundantCandidates(candidates);
+        const finalCandidates = tableDetectionMode === "planner-aware"
+            ? pruneCalendarLikeColumnCandidates(prunedCandidates)
+            : prunedCandidates;
+        return finalCandidates.sort((left, right) => {
             if (left.startRow !== right.startRow)
                 return left.startRow - right.startRow;
             return left.startCol - right.startCol;
@@ -5448,7 +5662,7 @@ if (!customElements.get("lht-page-menu")) {
         const text = String(value || "").trim();
         if (!text)
             return false;
-        return text !== "[MERGED←]" && text !== "[MERGED↑]";
+        return text !== "[←M←]" && text !== "[↑M↑]";
     }
     function applyMergeTokens(matrix, merges, startRow, startCol, endRow, endCol) {
         for (const merge of merges) {
@@ -5464,7 +5678,7 @@ if (!customElements.get("lht-page-menu")) {
                     if (!matrix[matrixRow] || typeof matrix[matrixRow][matrixCol] === "undefined") {
                         continue;
                     }
-                    matrix[matrixRow][matrixCol] = row === merge.startRow ? "[MERGED←]" : "[MERGED↑]";
+                    matrix[matrixRow][matrixCol] = row === merge.startRow ? "[←M←]" : "[↑M↑]";
                 }
             }
         }
@@ -5473,6 +5687,7 @@ if (!customElements.get("lht-page-menu")) {
         collectTableSeedCells,
         collectBorderSeedCells,
         pruneRedundantCandidates,
+        pruneCalendarLikeColumnCandidates,
         detectTableCandidates,
         trimTableCandidateBounds,
         matrixFromCandidate,
@@ -5877,6 +6092,34 @@ if (!customElements.get("lht-page-menu")) {
         function shouldStartNarrativeBlock(current, rowNumber, previousRow, startCol) {
             return !current || rowNumber - previousRow > 1 || Math.abs(startCol - current.startCol) > 3;
         }
+        function isIsoDateToken(value) {
+            return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+        }
+        function isWeekdayToken(value) {
+            const normalized = String(value || "").trim();
+            return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+        }
+        function isCalendarDateItem(item) {
+            if (!item)
+                return false;
+            const values = (item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean);
+            return values.length >= 5 && values.every((value) => isIsoDateToken(value) || isWeekdayToken(value));
+        }
+        function blockHasCalendarDateItem(block) {
+            var _a;
+            return !!((_a = block === null || block === void 0 ? void 0 : block.items) === null || _a === void 0 ? void 0 : _a.some((item) => isCalendarDateItem(item)));
+        }
+        function shouldAppendToCalendarNarrativeBlock(current, item, previousRow) {
+            if (!current || !blockHasCalendarDateItem(current)) {
+                return false;
+            }
+            const rowGap = item.row - previousRow;
+            if (rowGap < 0 || rowGap > 4) {
+                return false;
+            }
+            const startColDelta = Math.abs(item.startCol - current.startCol);
+            return startColDelta <= 24 || isCalendarDateItem(item);
+        }
         function createNarrativeBlockFromItem(item) {
             return {
                 startRow: item.row,
@@ -5897,7 +6140,10 @@ if (!customElements.get("lht-page-menu")) {
             let current = null;
             let previousRow = -100;
             for (const item of items) {
-                if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
+                if (shouldAppendToCalendarNarrativeBlock(current, item, previousRow)) {
+                    appendNarrativeItem(current, item);
+                }
+                else if (shouldStartNarrativeBlock(current, item.row, previousRow, item.startCol)) {
                     current = createNarrativeBlockFromItem(item);
                     blocks.push(current);
                 }
@@ -5913,7 +6159,8 @@ if (!customElements.get("lht-page-menu")) {
                 startRow: block.startRow,
                 startCol: block.startCol,
                 endRow: block.endRow,
-                endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol))
+                endCol: Math.max(block.startCol, ...block.items.map((item) => item.startCol)),
+                calendarLike: blockHasCalendarDateItem(block)
             }));
         }
         function createTableSectionAnchors(tables) {
@@ -5965,10 +6212,30 @@ if (!customElements.get("lht-page-menu")) {
                 endCol: anchor.endCol
             };
         }
-        function shouldStartNewSectionBlock(current, anchor, previousEndRow) {
+        function shouldStartNewSectionBlock(current, anchor, previousEndRow, previousAnchor) {
             const verticalGapThreshold = 4;
+            const horizontalGapThreshold = 3;
             const gap = anchor.startRow - previousEndRow;
-            return !current || gap > verticalGapThreshold;
+            if (!current) {
+                return true;
+            }
+            if (gap > verticalGapThreshold) {
+                const bothCalendarLike = !!(anchor.calendarLike && (previousAnchor === null || previousAnchor === void 0 ? void 0 : previousAnchor.calendarLike));
+                const horizontalGap = anchor.startCol - current.endCol;
+                if (!(bothCalendarLike && gap <= 8 && horizontalGap <= 24)) {
+                    return true;
+                }
+            }
+            const overlapsCurrentRows = anchor.startRow <= current.endRow + 1;
+            const horizontalGap = anchor.startCol - current.endCol;
+            const bothCalendarLike = !!(anchor.calendarLike && (previousAnchor === null || previousAnchor === void 0 ? void 0 : previousAnchor.calendarLike));
+            if (bothCalendarLike && horizontalGap <= 24 && (overlapsCurrentRows || gap <= 8)) {
+                return false;
+            }
+            if (overlapsCurrentRows && horizontalGap > horizontalGapThreshold) {
+                return true;
+            }
+            return false;
         }
         function extendSectionBlock(section, anchor) {
             section.startRow = Math.min(section.startRow, anchor.startRow);
@@ -5984,8 +6251,9 @@ if (!customElements.get("lht-page-menu")) {
             const sections = [];
             let current = null;
             let previousEndRow = -100;
+            let previousAnchor = null;
             for (const anchor of anchors) {
-                if (shouldStartNewSectionBlock(current, anchor, previousEndRow)) {
+                if (shouldStartNewSectionBlock(current, anchor, previousEndRow, previousAnchor)) {
                     current = createSectionBlockFromAnchor(anchor);
                     sections.push(current);
                 }
@@ -5993,6 +6261,7 @@ if (!customElements.get("lht-page-menu")) {
                     extendSectionBlock(current, anchor);
                 }
                 previousEndRow = Math.max(previousEndRow, anchor.endRow);
+                previousAnchor = anchor;
             }
             return sections;
         }
@@ -6172,7 +6441,80 @@ if (!customElements.get("lht-page-menu")) {
             })).filter((group) => group.entries.length > 0);
         }
         function renderGroupedSectionEntries(entries) {
-            return entries.map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+            return createCalendarAwareSectionEntries(entries).map((section) => section.markdown.trimEnd()).join("\n\n").trim();
+        }
+        function isIsoDateToken(value) {
+            return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+        }
+        function isWeekdayToken(value) {
+            const normalized = String(value || "").trim();
+            return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
+        }
+        function getNarrativeValues(section) {
+            var _a;
+            return ((_a = section.narrativeBlock) === null || _a === void 0 ? void 0 : _a.items.flatMap((item) => item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean)) || [];
+        }
+        function isCalendarBodySection(section) {
+            if (section.kind !== "narrative" || !section.narrativeBlock)
+                return false;
+            return section.narrativeBlock.items.some((item) => {
+                const values = (item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean);
+                return values.length >= 5 && values.every((value) => isIsoDateToken(value) || isWeekdayToken(value));
+            });
+        }
+        function isCalendarHeaderSection(section) {
+            if (section.kind !== "narrative" || !section.narrativeBlock)
+                return false;
+            const values = getNarrativeValues(section);
+            if (values.length === 0 || values.length > 10)
+                return false;
+            const allWeekdays = values.length >= 5 && values.every((value) => isWeekdayToken(value));
+            const hasMonthTitle = values.some((value) => /^\d{4}年\d{1,2}月$/.test(value));
+            const hasPlannerLabel = values.includes("目標と優先事項") || values.includes("その他");
+            return allWeekdays || hasMonthTitle || hasPlannerLabel;
+        }
+        function createSyntheticSection(markdown, sortRow, sortCol) {
+            return {
+                sortRow,
+                sortCol,
+                markdown,
+                kind: "narrative"
+            };
+        }
+        function createCalendarAwareSectionEntries(entries) {
+            const mainCalendarEntries = entries.filter((entry) => isCalendarBodySection(entry))
+                .sort((left, right) => {
+                if (left.sortCol !== right.sortCol)
+                    return left.sortCol - right.sortCol;
+                return left.sortRow - right.sortRow;
+            });
+            if (mainCalendarEntries.length === 0) {
+                return entries;
+            }
+            const main = mainCalendarEntries[0];
+            const headerEntries = entries.filter((entry) => (entry !== main
+                && isCalendarHeaderSection(entry)
+                && entry.sortRow <= main.sortRow + 1));
+            const sidebarEntries = entries.filter((entry) => (entry !== main
+                && !headerEntries.includes(entry)
+                && isCalendarBodySection(entry)
+                && entry.sortCol >= main.sortCol + 10));
+            const remainingEntries = entries.filter((entry) => (entry !== main
+                && !headerEntries.includes(entry)
+                && !sidebarEntries.includes(entry)));
+            if (headerEntries.length === 0 && sidebarEntries.length === 0) {
+                return entries;
+            }
+            const reordered = [];
+            reordered.push(...headerEntries);
+            reordered.push(main);
+            if (sidebarEntries.length > 0) {
+                const firstSidebar = sidebarEntries[0];
+                reordered.push(createSyntheticSection("### Sidebar\n", firstSidebar.sortRow - 0.1, firstSidebar.sortCol));
+                reordered.push(...sidebarEntries);
+            }
+            reordered.push(...remainingEntries);
+            return reordered;
         }
         function renderGroupedSectionBody(groupedSections) {
             return groupedSections
@@ -6282,6 +6624,7 @@ if (!customElements.get("lht-page-menu")) {
             extractSectionBlocks,
             sortContentSections,
             createGroupedSections,
+            createCalendarAwareSectionEntries,
             renderGroupedSectionBody,
             collectSheetRenderState,
             createSheetMarkdownText,
@@ -12381,6 +12724,10 @@ if (!customElements.get("lht-page-menu")) {
     }
     function updateTableDetectionModeNotice(mode) {
         const notice = getElement("tableDetectionModeNotice");
+        if (mode === "planner-aware") {
+            notice.textContent = "`planner-aware` adds planner/calendar-specific suppression heuristics for layout-heavy sheets.";
+            return;
+        }
         if (mode === "border") {
             notice.textContent = "`border` detects tables from bordered regions and suppresses borderless fallback detection.";
             return;

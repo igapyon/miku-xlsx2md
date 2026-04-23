@@ -40,8 +40,8 @@ Options:
   --encoding <value>            utf-8 | shift_jis | utf-16le | utf-16be | utf-32le | utf-32be (default: utf-8)
   --bom <value>                 off | on (default: off; shift_jis does not allow on)
   --output-mode <mode>          display | raw | both (default: display)
-  --formatting-mode <mode>      plain | github (default: plain)
-  --table-detection-mode <mode> balanced | border (default: balanced)
+  --formatting-mode <mode>      plain | github (default: github)
+  --table-detection-mode <mode> balanced | border | planner-aware (default: balanced)
   --shape-details <mode>        include | exclude (default: exclude)
   --include-shape-details       Alias for --shape-details include
   --no-header-row               Do not treat the first row as a table header
@@ -50,6 +50,9 @@ Options:
   --keep-empty-columns          Keep empty columns
   --summary                     Print per-sheet summary to stdout
   --help                        Show this help and exit
+
+GUI-aligned defaults:
+  output-mode=display, formatting-mode=github, table-detection-mode=balanced, shape-details=exclude
 
 Exit codes:
   0                             Success
@@ -130,7 +133,7 @@ function parseArgs(argv, markdownOptions) {
     removeEmptyColumns: true,
     includeShapeDetails: false,
     outputMode: "display",
-    formattingMode: "plain",
+    formattingMode: "github",
     tableDetectionMode: "balanced",
     encoding: "utf-8",
     bom: "off",

@@ -109,6 +109,9 @@ describe("xlsx2md cli", () => {
     expect(result.stdout).toContain("--bom");
     expect(result.stdout).toContain("--formatting-mode");
     expect(result.stdout).toContain("--table-detection-mode");
+    expect(result.stdout).toContain("GUI-aligned defaults:");
+    expect(result.stdout).toContain("formatting-mode=github");
+    expect(result.stdout).toContain("shape-details=exclude");
     expect(result.stdout).toContain("Exit codes:");
   });
 

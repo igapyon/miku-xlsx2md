@@ -209,7 +209,8 @@
             return values.length >= 5 && values.every((value) => isIsoDateToken(value) || isWeekdayToken(value));
         }
         function blockHasCalendarDateItem(block) {
-            return !!block?.items?.some((item) => isCalendarDateItem(item));
+            var _a;
+            return !!((_a = block === null || block === void 0 ? void 0 : block.items) === null || _a === void 0 ? void 0 : _a.some((item) => isCalendarDateItem(item)));
         }
         function shouldAppendToCalendarNarrativeBlock(current, item, previousRow) {
             if (!current || !blockHasCalendarDateItem(current)) {
@@ -322,7 +323,7 @@
                 return true;
             }
             if (gap > verticalGapThreshold) {
-                const bothCalendarLike = !!(anchor.calendarLike && previousAnchor?.calendarLike);
+                const bothCalendarLike = !!(anchor.calendarLike && (previousAnchor === null || previousAnchor === void 0 ? void 0 : previousAnchor.calendarLike));
                 const horizontalGap = anchor.startCol - current.endCol;
                 if (!(bothCalendarLike && gap <= 8 && horizontalGap <= 24)) {
                     return true;
@@ -330,7 +331,7 @@
             }
             const overlapsCurrentRows = anchor.startRow <= current.endRow + 1;
             const horizontalGap = anchor.startCol - current.endCol;
-            const bothCalendarLike = !!(anchor.calendarLike && previousAnchor?.calendarLike);
+            const bothCalendarLike = !!(anchor.calendarLike && (previousAnchor === null || previousAnchor === void 0 ? void 0 : previousAnchor.calendarLike));
             if (bothCalendarLike && horizontalGap <= 24 && (overlapsCurrentRows || gap <= 8)) {
                 return false;
             }
@@ -553,7 +554,8 @@
             return ["日", "月", "火", "水", "木", "金", "土", "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"].includes(normalized);
         }
         function getNarrativeValues(section) {
-            return section.narrativeBlock?.items.flatMap((item) => item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean) || [];
+            var _a;
+            return ((_a = section.narrativeBlock) === null || _a === void 0 ? void 0 : _a.items.flatMap((item) => item.cellValues || []).map((value) => String(value || "").trim()).filter(Boolean)) || [];
         }
         function isCalendarBodySection(section) {
             if (section.kind !== "narrative" || !section.narrativeBlock)

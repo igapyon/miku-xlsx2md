@@ -20,7 +20,7 @@ function createDomFixture() {
     <input id="trimTextEnabled" type="checkbox" checked />
     <input id="removeEmptyRowsEnabled" type="checkbox" checked />
     <input id="removeEmptyColumnsEnabled" type="checkbox" checked />
-    <input id="includeShapeDetailsEnabled" type="checkbox" checked />
+    <input id="includeShapeDetailsEnabled" type="checkbox" />
     <select id="outputModeSelect">
       <option value="display" selected>display</option>
       <option value="raw">raw</option>
@@ -42,6 +42,7 @@ function createDomFixture() {
     <select id="tableDetectionModeSelect">
       <option value="balanced" selected>balanced</option>
       <option value="border">border</option>
+      <option value="planner-aware">planner-aware</option>
     </select>
     <div id="outputModeNotice"></div>
     <div id="formattingModeNotice"></div>
@@ -185,7 +186,7 @@ describe("xlsx2md main ui", () => {
 
   it("loads a workbook from the file input and passes UI options to conversion", async () => {
     const api = bootMain();
-    document.getElementById("includeShapeDetailsEnabled").checked = false;
+    document.getElementById("includeShapeDetailsEnabled").checked = true;
     document.getElementById("outputModeSelect").value = "both";
     document.getElementById("formattingModeSelect").value = "github";
     document.getElementById("tableDetectionModeSelect").value = "border";
@@ -203,11 +204,11 @@ describe("xlsx2md main ui", () => {
     fileInput.dispatchEvent(new Event("change"));
     await flushAsyncWork();
 
-    expect(api.parseWorkbook).toHaveBeenCalledWith(expect.any(ArrayBuffer), "sample.xlsx", { includeShapeDetails: false });
+    expect(api.parseWorkbook).toHaveBeenCalledWith(expect.any(ArrayBuffer), "sample.xlsx", { includeShapeDetails: true });
     expect(api.convertWorkbookToMarkdownFiles).toHaveBeenCalledWith(
       expect.objectContaining({ name: "book.xlsx" }),
       expect.objectContaining({
-        includeShapeDetails: false,
+        includeShapeDetails: true,
         outputMode: "both",
         formattingMode: "github",
         tableDetectionMode: "border",
@@ -253,10 +254,10 @@ describe("xlsx2md main ui", () => {
     await flushAsyncWork();
     api.parseWorkbook.mockClear();
 
-    document.getElementById("includeShapeDetailsEnabled").checked = false;
+    document.getElementById("includeShapeDetailsEnabled").checked = true;
     document.getElementById("convertBtn").click();
     await flushAsyncWork();
 
-    expect(api.parseWorkbook).toHaveBeenCalledWith(expect.any(ArrayBuffer), "sample.xlsx", { includeShapeDetails: false });
+    expect(api.parseWorkbook).toHaveBeenCalledWith(expect.any(ArrayBuffer), "sample.xlsx", { includeShapeDetails: true });
   });
 });

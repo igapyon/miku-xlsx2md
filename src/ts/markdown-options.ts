@@ -14,7 +14,7 @@
     includeShapeDetails?: boolean;
     outputMode?: "display" | "raw" | "both" | string;
     formattingMode?: "plain" | "github" | string;
-    tableDetectionMode?: "balanced" | "border" | string;
+    tableDetectionMode?: "balanced" | "border" | "planner-aware" | string;
   };
 
   type ResolvedMarkdownOptions = {
@@ -25,13 +25,13 @@
     includeShapeDetails: boolean;
     outputMode: "display" | "raw" | "both";
     formattingMode: "plain" | "github";
-    tableDetectionMode: "balanced" | "border";
+    tableDetectionMode: "balanced" | "border" | "planner-aware";
   };
 
   const OUTPUT_MODES = ["display", "raw", "both"] as const;
   const FORMATTING_MODES = ["plain", "github"] as const;
-  const TABLE_DETECTION_MODES = ["balanced", "border"] as const;
-  const TABLE_DETECTION_MODE_ALIASES: Record<string, "balanced" | "border"> = {
+  const TABLE_DETECTION_MODES = ["balanced", "border", "planner-aware"] as const;
+  const TABLE_DETECTION_MODE_ALIASES: Record<string, "balanced" | "border" | "planner-aware"> = {
     "border-priority": "border"
   };
 
@@ -63,7 +63,7 @@
     return normalizeEnum(value, FORMATTING_MODES, "plain");
   }
 
-  function normalizeTableDetectionMode(value?: string | null): "balanced" | "border" {
+  function normalizeTableDetectionMode(value?: string | null): "balanced" | "border" | "planner-aware" {
     return normalizeEnum(value, TABLE_DETECTION_MODES, "balanced", TABLE_DETECTION_MODE_ALIASES);
   }
 

@@ -215,8 +215,8 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).toContain("| 10 | 指数 | value9 | 1.023456E+06 | 指数 |");
     expect(markdownFile.markdown).toContain("| 12 | その他 | value11 | 1 0 2 3 4 5 6 | その他 |");
     expect(markdownFile.markdown).toContain("| 13 | ユーザー定義 | value12 | 令和8年3月17日 | ユーザー定義 |");
-    expect(markdownFile.markdown).toContain("[MERGED←]");
-    expect(markdownFile.markdown).toContain("[MERGED↑]");
+    expect(markdownFile.markdown).toContain("[←M←]");
+    expect(markdownFile.markdown).toContain("[↑M↑]");
   });
 
   it("parses the display-format fixture workbook with concrete display expectations", async () => {
@@ -445,14 +445,14 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).toContain("### Table: 001 (A1-E4)");
     expect(markdownFile.markdown).toContain("### Table: 002 (A7-D11)");
     expect(markdownFile.markdown).toContain("### Table: 003 (A14-E18)");
-    expect(markdownFile.markdown).toContain("| 1 | 横結合 | [MERGED←] | 横結合 | [MERGED←] |");
-    expect(markdownFile.markdown).toContain("| 2 | [MERGED↑] | [MERGED↑] | [MERGED↑] |");
-    expect(markdownFile.markdown).toContain("| 1 | 2x2結合 | [MERGED←] | 2x2結合 | [MERGED←] |");
+    expect(markdownFile.markdown).toContain("| 1 | 横結合 | [←M←] | 横結合 | [←M←] |");
+    expect(markdownFile.markdown).toContain("| 2 | [↑M↑] | [↑M↑] | [↑M↑] |");
+    expect(markdownFile.markdown).toContain("| 1 | 2x2結合 | [←M←] | 2x2結合 | [←M←] |");
     expect(markdownFile.markdown).toContain("※横結合のサンプルです");
     expect(markdownFile.markdown).toContain("※縦結合のサンプルです");
     expect(markdownFile.markdown).toContain("※2x2結合のサンプルです");
-    expect(markdownFile.markdown).toContain("[MERGED←]");
-    expect(markdownFile.markdown).toContain("[MERGED↑]");
+    expect(markdownFile.markdown).toContain("[←M←]");
+    expect(markdownFile.markdown).toContain("[↑M↑]");
   });
 
   it("parses the merge-multiline fixture workbook with concrete multiline-merge expectations", async () => {
@@ -496,8 +496,8 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).toContain("## Sheet: merge-multiline");
     expect(markdownFile.markdown).toContain("# Book: merge-multiline-sample01.xlsx");
     expect(markdownFile.markdown).toContain("### Table: 001 (A1-C4)");
-    expect(markdownFile.markdown).toContain("| 1 | 1行目 2行目 | [MERGED←] |");
-    expect(markdownFile.markdown).toContain("| 2 | [MERGED↑] | [MERGED↑] |");
+    expect(markdownFile.markdown).toContain("| 1 | 1行目 2行目 | [←M←] |");
+    expect(markdownFile.markdown).toContain("| 2 | [↑M↑] | [↑M↑] |");
     expect(markdownFile.markdown).toContain("※結合セル内の改行確認用");
   });
 
@@ -2284,7 +2284,7 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).toContain("# Book: table-basic-sample15.xlsx");
     expect(markdownFile.markdown).toContain("### Table: 001 (B3-T7)");
     expect(markdownFile.markdown).toContain("| 3 | 登録日 | entrydate | 3月13日 | 登録および更新日 |");
-    expect(markdownFile.markdown).toContain("| 4 | 更新日 | updatedate | 3月14日 | [MERGED↑] |");
+    expect(markdownFile.markdown).toContain("| 4 | 更新日 | updatedate | 3月14日 | [↑M↑] |");
     expect(markdownFile.markdown).toContain("※方眼紙＋結合＋さらに縦結合");
   });
 
@@ -2326,7 +2326,7 @@ describe("xlsx2md core", () => {
     expect(markdownFile.summary.tableScores.map((detail) => detail.range)).toEqual(["B3-T7"]);
     expect(markdownFile.markdown).toContain("# Book: table-basic-sample16.xlsx");
     expect(markdownFile.markdown).toContain("### Table: 001 (B3-T7)");
-    expect(markdownFile.markdown).toContain("| 項番 | 項目名称 | 物理名 | デフォルト値 | [MERGED←] | 備考 |");
+    expect(markdownFile.markdown).toContain("| 項番 | 項目名称 | 物理名 | デフォルト値 | [←M←] | 備考 |");
     expect(markdownFile.markdown).toContain("| 2 | 名前 | name | Taro | Ito | 何かの名前 |");
     expect(markdownFile.markdown).toContain("たまに結合漏れのセルがあって、さらに複数文字が登場");
   });
@@ -2451,10 +2451,10 @@ describe("xlsx2md core", () => {
       { startRow: 1, startCol: 1, endRow: 2, endCol: 3, ref: "A1:C2" }
     ], 1, 1, 3, 3);
 
-    expect(matrix[0][1]).toBe("[MERGED←]");
-    expect(matrix[0][2]).toBe("[MERGED←]");
-    expect(matrix[1][0]).toBe("[MERGED↑]");
-    expect(matrix[1][2]).toBe("[MERGED↑]");
+    expect(matrix[0][1]).toBe("[←M←]");
+    expect(matrix[0][2]).toBe("[←M←]");
+    expect(matrix[1][0]).toBe("[↑M↑]");
+    expect(matrix[1][2]).toBe("[↑M↑]");
   });
 
   it("extracts narrative blocks outside tables", () => {
@@ -3309,7 +3309,7 @@ describe("xlsx2md core", () => {
     expect(markdownFile.markdown).not.toContain("イベント チェックリスト イベント カテゴリ");
   });
 
-  it("does not turn repeated narrow calendar-like columns into many small tables", () => {
+  it("planner-aware does not turn repeated narrow calendar-like columns into many small tables", () => {
     const api = bootCore();
     const workbook = { name: "calendar-layout.xlsx" };
     const sheet = {
@@ -3356,7 +3356,7 @@ describe("xlsx2md core", () => {
       removeEmptyRows: true,
       removeEmptyColumns: true,
       treatFirstRowAsHeader: true,
-      tableDetectionMode: "border"
+      tableDetectionMode: "planner-aware"
     });
 
     expect(markdownFile.summary.tables).toBe(0);

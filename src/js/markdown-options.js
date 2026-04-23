@@ -6,7 +6,7 @@
     const moduleRegistry = getXlsx2mdModuleRegistry();
     const OUTPUT_MODES = ["display", "raw", "both"];
     const FORMATTING_MODES = ["plain", "github"];
-    const TABLE_DETECTION_MODES = ["balanced", "border"];
+    const TABLE_DETECTION_MODES = ["balanced", "border", "planner-aware"];
     const TABLE_DETECTION_MODE_ALIASES = {
         "border-priority": "border"
     };

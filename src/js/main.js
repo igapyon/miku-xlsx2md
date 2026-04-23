@@ -252,6 +252,10 @@
     }
     function updateTableDetectionModeNotice(mode) {
         const notice = getElement("tableDetectionModeNotice");
+        if (mode === "planner-aware") {
+            notice.textContent = "`planner-aware` adds planner/calendar-specific suppression heuristics for layout-heavy sheets.";
+            return;
+        }
         if (mode === "border") {
             notice.textContent = "`border` detects tables from bordered regions and suppresses borderless fallback detection.";
             return;

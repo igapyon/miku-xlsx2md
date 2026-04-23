@@ -178,22 +178,22 @@
             }
             return sparseRows;
         }
-    function maybePushCandidate(component, sourceKind = "border") {
-        const rows = component.map((entry) => entry.row);
-        const cols = component.map((entry) => entry.col);
+        function maybePushCandidate(component, sourceKind = "border") {
+            const rows = component.map((entry) => entry.row);
+            const cols = component.map((entry) => entry.col);
             const startRow = Math.min(...rows);
             const endRow = Math.max(...rows);
             const startCol = Math.min(...cols);
             const endCol = Math.max(...cols);
             const area = Math.max(1, (endRow - startRow + 1) * (endCol - startCol + 1));
             const density = component.filter((entry) => entry.outputValue.trim()).length / area;
-        const rowCount = endRow - startRow + 1;
-        const colCount = endCol - startCol + 1;
-        const sparseRowCount = countSparseRows(component, startRow, endRow);
-        const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
-        if (rowCount < 2 || colCount < 2) {
-            return;
-        }
+            const rowCount = endRow - startRow + 1;
+            const colCount = endCol - startCol + 1;
+            const sparseRowCount = countSparseRows(component, startRow, endRow);
+            const nonEmptyCells = component.filter((entry) => entry.outputValue.trim());
+            if (rowCount < 2 || colCount < 2) {
+                return;
+            }
             let score = 0;
             const reasons = [];
             const normalizedBorderedCellCount = borderGridHelper.countNormalizedBorderedCells(cellMap, startRow, startCol, endRow, endCol);
@@ -225,66 +225,71 @@
             const mergedArea = sheet.merges.filter((merge) => {
                 return !(merge.endRow < startRow || merge.startRow > endRow || merge.endCol < startCol || merge.startCol > endCol);
             }).length;
-        if (mergedArea >= Math.max(2, Math.ceil(area * 0.08))) {
-            score += scoreWeights.mergeHeavyPenalty;
-            reasons.push(`Many merged cells (${scoreWeights.mergeHeavyPenalty})`);
-        }
-        if (sourceKind === "border") {
-            const looksLikeTinyMergedLabelStub = (rowCount <= 2
-                && colCount <= 2
-                && mergedArea >= 1
-                && nonEmptyCells.length <= 2
-                && headerishCount <= 1);
-            if (looksLikeTinyMergedLabelStub) {
-                return;
+            if (mergedArea >= Math.max(2, Math.ceil(area * 0.08))) {
+                score += scoreWeights.mergeHeavyPenalty;
+                reasons.push(`Many merged cells (${scoreWeights.mergeHeavyPenalty})`);
             }
-            if (mergedArea >= 2 && density < 0.25 && headerishCount < 2) {
-                return;
+            const plannerAwareMode = tableDetectionMode === "planner-aware";
+            if (sourceKind === "border") {
+                const looksLikeTinyMergedLabelStub = (rowCount <= 2
+                    && colCount <= 2
+                    && mergedArea >= 1
+                    && nonEmptyCells.length <= 2
+                    && headerishCount <= 1);
+                if (looksLikeTinyMergedLabelStub) {
+                    return;
+                }
+                if (mergedArea >= 2 && density < 0.25 && headerishCount < 2) {
+                    return;
+                }
+                if (plannerAwareMode) {
+                    const looksLikeWideSparseMergeForm = (colCount >= 8
+                        && rowCount >= 4
+                        && density < 0.45
+                        && mergedArea >= Math.max(4, rowCount - 1)
+                        && sparseRowCount >= Math.ceil(rowCount * 0.7));
+                    if (looksLikeWideSparseMergeForm) {
+                        return;
+                    }
+                }
             }
-                const looksLikeWideSparseMergeForm = (colCount >= 8
-                    && rowCount >= 4
-                    && density < 0.45
-                    && mergedArea >= Math.max(4, rowCount - 1)
-                    && sparseRowCount >= Math.ceil(rowCount * 0.7));
-            if (looksLikeWideSparseMergeForm) {
-                return;
+            else {
+                if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
+                    return;
+                }
+                if (plannerAwareMode) {
+                    const looksLikeMixedLayoutSheet = (rowCount >= 20
+                        && colCount >= 8
+                        && mergedArea >= 4
+                        && sparseRowCount >= 4
+                        && density < 0.8);
+                    if (looksLikeMixedLayoutSheet) {
+                        return;
+                    }
+                }
             }
-        }
-        else {
-            if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
-                return;
-            }
-            const looksLikeMixedLayoutSheet = (rowCount >= 20
-                && colCount >= 8
-                && mergedArea >= 4
-                && sparseRowCount >= 4
-                && density < 0.8);
-            if (looksLikeMixedLayoutSheet) {
-                return;
-            }
-        }
-        const avgTextLength = nonEmptyCells
-            .reduce((sum, entry) => sum + entry.outputValue.trim().length, 0) / Math.max(1, nonEmptyCells.length);
+            const avgTextLength = nonEmptyCells
+                .reduce((sum, entry) => sum + entry.outputValue.trim().length, 0) / Math.max(1, nonEmptyCells.length);
             if (avgTextLength > 36 && density < 0.7) {
                 score += scoreWeights.prosePenalty;
                 reasons.push(`Mostly long prose (${scoreWeights.prosePenalty})`);
             }
-        if (score >= scoreWeights.threshold) {
-            const normalizedBounds = trimTableCandidateBounds(cellMap, {
-                startRow,
-                startCol,
-                endRow,
-                endCol
-            });
-            if (normalizedBounds.endRow - normalizedBounds.startRow + 1 < 2
-                || normalizedBounds.endCol - normalizedBounds.startCol + 1 < 2) {
-                return;
-            }
-            const key = `${normalizedBounds.startRow}:${normalizedBounds.startCol}:${normalizedBounds.endRow}:${normalizedBounds.endCol}`;
-            if (candidateKeys.has(key)) {
-                return;
-            }
-            candidateKeys.add(key);
+            if (score >= scoreWeights.threshold) {
+                const normalizedBounds = trimTableCandidateBounds(cellMap, {
+                    startRow,
+                    startCol,
+                    endRow,
+                    endCol
+                });
+                if (normalizedBounds.endRow - normalizedBounds.startRow + 1 < 2
+                    || normalizedBounds.endCol - normalizedBounds.startCol + 1 < 2) {
+                    return;
+                }
+                const key = `${normalizedBounds.startRow}:${normalizedBounds.startCol}:${normalizedBounds.endRow}:${normalizedBounds.endCol}`;
+                if (candidateKeys.has(key)) {
+                    return;
+                }
+                candidateKeys.add(key);
                 candidates.push({
                     startRow: normalizedBounds.startRow,
                     startCol: normalizedBounds.startCol,
@@ -319,7 +324,11 @@
                 maybePushCandidate(component, "fallback");
             }
         }
-        return pruneCalendarLikeColumnCandidates(pruneRedundantCandidates(candidates)).sort((left, right) => {
+        const prunedCandidates = pruneRedundantCandidates(candidates);
+        const finalCandidates = tableDetectionMode === "planner-aware"
+            ? pruneCalendarLikeColumnCandidates(prunedCandidates)
+            : prunedCandidates;
+        return finalCandidates.sort((left, right) => {
             if (left.startRow !== right.startRow)
                 return left.startRow - right.startRow;
             return left.startCol - right.startCol;
