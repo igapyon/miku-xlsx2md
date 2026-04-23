@@ -28,7 +28,7 @@
     summary: {
       outputMode: "display" | "raw" | "both";
       formattingMode: "plain" | "github";
-      tableDetectionMode: "balanced" | "border";
+      tableDetectionMode: "balanced" | "border" | "planner-aware";
       sections: number;
       tables: number;
       narrativeBlocks: number;

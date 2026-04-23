@@ -278,7 +278,7 @@ describe("xlsx2md table detector", () => {
     expect(candidates).toHaveLength(0);
   });
 
-  it("drops calendar-like narrow table candidates when many columns line up in the same band", () => {
+  it("planner-aware drops calendar-like narrow table candidates when many columns line up in the same band", () => {
     const api = bootTableDetector();
     const sheet = {
       cells: [
@@ -312,7 +312,7 @@ describe("xlsx2md table detector", () => {
       merges: []
     };
 
-    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "border");
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "planner-aware");
 
     expect(candidates).toHaveLength(0);
   });
@@ -334,7 +334,7 @@ describe("xlsx2md table detector", () => {
     expect(candidates).toHaveLength(0);
   });
 
-  it("does not keep a huge fallback candidate for a merge-heavy mixed layout sheet", () => {
+  it("planner-aware does not keep a huge fallback candidate for a merge-heavy mixed layout sheet", () => {
     const api = bootTableDetector();
     const cells = [];
     for (let row = 1; row <= 24; row += 1) {
@@ -355,7 +355,7 @@ describe("xlsx2md table detector", () => {
       ]
     };
 
-    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced");
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "planner-aware");
 
     expect(candidates).toHaveLength(0);
   });

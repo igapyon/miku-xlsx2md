@@ -47,7 +47,7 @@
     removeEmptyColumns?: boolean;
   };
 
-  type TableDetectionMode = "balanced" | "border";
+  type TableDetectionMode = "balanced" | "border" | "planner-aware";
 
   type TableScoreWeights = {
     minGrid: number;
@@ -319,6 +319,8 @@
         reasons.push(`Many merged cells (${scoreWeights.mergeHeavyPenalty})`);
       }
 
+      const plannerAwareMode = tableDetectionMode === "planner-aware";
+
       if (sourceKind === "border") {
         const looksLikeTinyMergedLabelStub = (
           rowCount <= 2
@@ -333,29 +335,33 @@
         if (mergedArea >= 2 && density < 0.25 && headerishCount < 2) {
           return;
         }
-        const looksLikeWideSparseMergeForm = (
-          colCount >= 8
-          && rowCount >= 4
-          && density < 0.45
-          && mergedArea >= Math.max(4, rowCount - 1)
-          && sparseRowCount >= Math.ceil(rowCount * 0.7)
-        );
-        if (looksLikeWideSparseMergeForm) {
-          return;
+        if (plannerAwareMode) {
+          const looksLikeWideSparseMergeForm = (
+            colCount >= 8
+            && rowCount >= 4
+            && density < 0.45
+            && mergedArea >= Math.max(4, rowCount - 1)
+            && sparseRowCount >= Math.ceil(rowCount * 0.7)
+          );
+          if (looksLikeWideSparseMergeForm) {
+            return;
+          }
         }
       } else {
         if (mergedArea >= 2 && rowCount <= 6 && colCount >= 10 && density < 0.25) {
           return;
         }
-        const looksLikeMixedLayoutSheet = (
-          rowCount >= 20
-          && colCount >= 8
-          && mergedArea >= 4
-          && sparseRowCount >= 4
-          && density < 0.8
-        );
-        if (looksLikeMixedLayoutSheet) {
-          return;
+        if (plannerAwareMode) {
+          const looksLikeMixedLayoutSheet = (
+            rowCount >= 20
+            && colCount >= 8
+            && mergedArea >= 4
+            && sparseRowCount >= 4
+            && density < 0.8
+          );
+          if (looksLikeMixedLayoutSheet) {
+            return;
+          }
         }
       }
 
@@ -423,7 +429,12 @@
       }
     }
 
-    return pruneCalendarLikeColumnCandidates(pruneRedundantCandidates(candidates)).sort((left, right) => {
+    const prunedCandidates = pruneRedundantCandidates(candidates);
+    const finalCandidates = tableDetectionMode === "planner-aware"
+      ? pruneCalendarLikeColumnCandidates(prunedCandidates)
+      : prunedCandidates;
+
+    return finalCandidates.sort((left, right) => {
       if (left.startRow !== right.startRow) return left.startRow - right.startRow;
       return left.startCol - right.startCol;
     });

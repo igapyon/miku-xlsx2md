@@ -46,6 +46,7 @@ describe("xlsx2md node runtime", () => {
 
     expect(api.markdownOptions.OUTPUT_MODES).toContain("display");
     expect(api.markdownOptions.FORMATTING_MODES).toContain("github");
+    expect(api.markdownOptions.TABLE_DETECTION_MODES).toContain("planner-aware");
     expect(api.markdownOptions.normalizeTableDetectionMode("border-priority")).toBe("border");
   });
 });
