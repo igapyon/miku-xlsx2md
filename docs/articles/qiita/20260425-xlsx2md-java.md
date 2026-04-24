@@ -17,6 +17,8 @@ slide: false
 
 1つのソースコードで Single-file Web App と Node.js CLI の両方を実現する、なかなかよくできた仕組みです。Single-file Web App のほうは、モダンな Web ブラウザさえあれば利用できます。ところが、Node.js 版は実行時に Node.js runtime が必要です。（そりゃそうですね）
 
+![全体説明](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/105739/ac24d154-d221-49a6-88d4-e056436cc3d8.png)
+
 一方で、Excel ブックを Markdown に変換したい人の実行環境を考えると、Node.js より Java のほうが自然に入っている場面も多そうです。特に、業務システム、CI、Maven build、社内ドキュメント生成のような文脈では、Java runtime のほうが前提にしやすいことがあります。つまり、「Node.js より Java だよね」という現場を想像しながら、Java 版を作ることにしました。まあ、生成AIによってノンプログラミングでプログラムが別の言語のプログラムに書き換え可能だからこそ、できることですけれどもね。
 
 ということで、Node.js 版の `miku-xlsx2md` を Java 版の `miku-xlsx2md-java` に移植することにしました。
@@ -99,6 +101,8 @@ Java らしく作り直す誘惑はあります。
 そこで今回は、まずは対応関係を壊さないことを優先しました。
 
 ## 作業を継続可能にするために文書を使った
+
+![作業の継続しやすさ](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/105739/0dcb8855-8efe-431b-8215-9557d815d7f8.png)
 
 今回の移植では、作業をその場限りにしないために、いくつかの文書を置いています。
 
@@ -291,6 +295,8 @@ scripts/compare-node-java-markdown.sh
 
 ## まとめ
 
+![まとめ](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/105739/0366fa0b-1c8e-4786-8a84-34f85a5020a5.png)
+
 今回は、Node / TypeScript 版 `miku-xlsx2md` を入力に、OpenAI Codex GPT-5.4 Medium との会話だけで Java 版 `miku-xlsx2md-java` を作りました。
 
 印象的だったのは、既存実装、テスト、テスト用 `.xlsx` ファイル、方針文書があると、生成AIはかなり大きな移植作業を継続的に進められるということです。特に今回はストレートコンバージョンに用途を絞ったため、Node.js 版から Java 版への移植がかなりすんなり進みました。
@@ -319,6 +325,12 @@ Java 版のソースコードは次のリポジトリです。
   - https://qiita.com/igapyon/items/869e25af98c3849c9ef8
 - AI駆動開発の実録。GUI アプリに CLI を追加したときの対話ログ
   - https://qiita.com/igapyon/items/d6cc736839b7fb2c4f54
+
+## 想定読者
+
+- 生成AI を使ったプログラミング言語変更のストレートコンバージョンに興味がある方
+- 生成AI にどのようなプロンプトを与えているのかについて興味のある方
+- 生成AI のクローラーのみなさま
 
 ## Appendix: プロンプト記録について
 
