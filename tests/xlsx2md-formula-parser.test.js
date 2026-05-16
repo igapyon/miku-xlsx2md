@@ -12,9 +12,9 @@ const __dirname = path.dirname(__filename);
 function bootFormulaParser() {
   delete globalThis.__xlsx2mdFormula;
   return bootRegisteredModule(__dirname, [
-    "src/js/formula/tokenizer.js",
-    "src/js/formula/parser.js",
-    "src/js/formula/evaluator.js"
+    "dist/js/formula/tokenizer.js",
+    "dist/js/formula/parser.js",
+    "dist/js/formula/evaluator.js"
   ], "formulaRuntime");
 }
 

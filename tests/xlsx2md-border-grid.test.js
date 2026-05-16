@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootBorderGrid() {
-  return bootRegisteredModule(__dirname, ["src/js/border-grid.js"], "borderGrid");
+  return bootRegisteredModule(__dirname, ["dist/js/border-grid.js"], "borderGrid");
 }
 
 describe("xlsx2md border grid", () => {

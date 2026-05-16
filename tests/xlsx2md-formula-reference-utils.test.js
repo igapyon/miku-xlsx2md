@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootFormulaReferenceUtils() {
-  return bootRegisteredModule(__dirname, ["src/js/formula-reference-utils.js"], "formulaReferenceUtils");
+  return bootRegisteredModule(__dirname, ["dist/js/formula-reference-utils.js"], "formulaReferenceUtils");
 }
 
 describe("xlsx2md formula reference utils", () => {

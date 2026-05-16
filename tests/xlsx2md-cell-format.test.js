@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootCellFormat() {
-  return bootRegisteredModule(__dirname, ["src/js/cell-format.js"], "cellFormat");
+  return bootRegisteredModule(__dirname, ["dist/js/cell-format.js"], "cellFormat");
 }
 
 describe("xlsx2md cell format", () => {

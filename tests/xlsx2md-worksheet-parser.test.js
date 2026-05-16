@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootWorksheetParser() {
-  return bootRegisteredModule(__dirname, ["src/js/worksheet-parser.js"], "worksheetParser");
+  return bootRegisteredModule(__dirname, ["dist/js/worksheet-parser.js"], "worksheetParser");
 }
 
 function createDeps() {

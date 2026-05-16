@@ -14,7 +14,7 @@ This project accepts bug reports, feature requests, documentation fixes, tests, 
 ## Development Notes
 
 - `src/ts/` is the product-core source of truth.
-- `src/js/` contains generated JavaScript currently used by the Node CLI runtime helper, tests, and downstream runtime refresh workflows. Regenerate it with `npm run build`.
+- `dist/js/` contains ignored generated JavaScript used by the Node CLI runtime helper, tests, and runtime bundle generation. Regenerate it with `npm run build:core`.
 - Browser Web App files are maintained in `miku-xlsx2md-web`, not this repository.
 - Run relevant tests before submitting a pull request when possible.
 - When adding or replacing a third-party library, confirm the license and update `THIRD_PARTY_NOTICES.md` when the dependency is shipped, used in runtime/tooling, or otherwise important for downstream notice.
@@ -70,7 +70,7 @@ Contributors may be acknowledged in project history, release notes, or other pro
 ## 開発メモ
 
 - `src/ts/` が product core の正本です。
-- `src/js/` は、現時点では Node CLI runtime helper、テスト、downstream runtime refresh workflow が使う生成済み JavaScript です。`npm run build` で再生成します。
+- `dist/js/` は、Node CLI runtime helper、テスト、runtime bundle 生成が使う Git 管理外の生成済み JavaScript です。`npm run build:core` で再生成します。
 - ブラウザ Web App のファイルはこのリポジトリではなく `miku-xlsx2md-web` で管理します。
 - Pull Request 前に、可能な範囲で関連テストを実行してください。
 - サードパーティライブラリを追加または差し替える場合は、ライセンスを確認し、配布物・runtime・tooling の観点で告知が必要なら `THIRD_PARTY_NOTICES.md` を更新してください。

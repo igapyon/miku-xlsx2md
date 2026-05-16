@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootMarkdownNormalize() {
-  return bootRegisteredModule(__dirname, ["src/js/markdown-normalize.js"], "markdownNormalize");
+  return bootRegisteredModule(__dirname, ["dist/js/markdown-normalize.js"], "markdownNormalize");
 }
 
 describe("xlsx2md markdown normalize", () => {

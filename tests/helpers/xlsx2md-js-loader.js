@@ -7,9 +7,9 @@ import { XLSX2MD_CORE_JS_ORDER } from "../../scripts/lib/xlsx2md-module-order.mj
 import { loadModuleRegistry } from "./module-registry.js";
 
 const FORMULA_RUNTIME_MODULES = new Set([
-  "src/js/formula/tokenizer.js",
-  "src/js/formula/parser.js",
-  "src/js/formula/evaluator.js"
+  "dist/js/formula/tokenizer.js",
+  "dist/js/formula/parser.js",
+  "dist/js/formula/evaluator.js"
 ]);
 
 export function installWorkbookRuntimeGlobals() {
@@ -50,7 +50,7 @@ export function bootXlsx2mdCore(testDir, options = {}) {
   loadJsModules(
     testDir,
     XLSX2MD_CORE_JS_ORDER.filter((relPath) => (
-      relPath !== "src/js/module-registry.js" && relPath !== "src/js/module-registry-access.js"
+      relPath !== "dist/js/module-registry.js" && relPath !== "dist/js/module-registry-access.js"
       && (options.includeFormulaRuntime === true || !FORMULA_RUNTIME_MODULES.has(relPath))
     ))
   );
@@ -62,9 +62,9 @@ export function bootRichTextParser(testDir) {
   resetModuleRegistryStore();
   loadModuleRegistry(testDir);
   loadJsModules(testDir, [
-    "src/js/markdown-normalize.js",
-    "src/js/markdown-escape.js",
-    "src/js/rich-text-parser.js"
+    "dist/js/markdown-normalize.js",
+    "dist/js/markdown-escape.js",
+    "dist/js/rich-text-parser.js"
   ]);
   return globalThis.__xlsx2mdModuleRegistry.getModule("richTextParser")
     .createRichTextParserApi({
@@ -77,12 +77,12 @@ export function bootRichTextRenderer(testDir) {
   resetModuleRegistryStore();
   loadModuleRegistry(testDir);
   loadJsModules(testDir, [
-    "src/js/markdown-normalize.js",
-    "src/js/markdown-escape.js",
-    "src/js/rich-text-parser.js",
-    "src/js/rich-text-plain-formatter.js",
-    "src/js/rich-text-github-formatter.js",
-    "src/js/rich-text-renderer.js"
+    "dist/js/markdown-normalize.js",
+    "dist/js/markdown-escape.js",
+    "dist/js/rich-text-parser.js",
+    "dist/js/rich-text-plain-formatter.js",
+    "dist/js/rich-text-github-formatter.js",
+    "dist/js/rich-text-renderer.js"
   ]);
   return globalThis.__xlsx2mdModuleRegistry.getModule("richTextRenderer")
     .createRichTextRendererApi({
@@ -95,15 +95,15 @@ export function bootSheetMarkdownModule(testDir) {
   resetModuleRegistryStore();
   loadModuleRegistry(testDir);
   loadJsModules(testDir, [
-    "src/js/markdown-normalize.js",
-    "src/js/markdown-escape.js",
-    "src/js/markdown-table-escape.js",
-    "src/js/markdown-options.js",
-    "src/js/rich-text-parser.js",
-    "src/js/rich-text-plain-formatter.js",
-    "src/js/rich-text-github-formatter.js",
-    "src/js/rich-text-renderer.js",
-    "src/js/sheet-markdown.js"
+    "dist/js/markdown-normalize.js",
+    "dist/js/markdown-escape.js",
+    "dist/js/markdown-table-escape.js",
+    "dist/js/markdown-options.js",
+    "dist/js/rich-text-parser.js",
+    "dist/js/rich-text-plain-formatter.js",
+    "dist/js/rich-text-github-formatter.js",
+    "dist/js/rich-text-renderer.js",
+    "dist/js/sheet-markdown.js"
   ]);
   return globalThis.__xlsx2mdModuleRegistry.getModule("sheetMarkdown");
 }

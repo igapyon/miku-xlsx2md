@@ -13,10 +13,10 @@ import {
 
 const ROOT = process.cwd();
 const LOCAL_DATA_DIR = path.resolve(ROOT, "local-data");
-const tokenizerCode = readFileSync(path.resolve(ROOT, "src/js/formula/tokenizer.js"), "utf8");
-const parserCode = readFileSync(path.resolve(ROOT, "src/js/formula/parser.js"), "utf8");
-const evaluatorCode = readFileSync(path.resolve(ROOT, "src/js/formula/evaluator.js"), "utf8");
-const coreCode = readFileSync(path.resolve(ROOT, "src/js/core.js"), "utf8");
+const tokenizerCode = readFileSync(path.resolve(ROOT, "dist/js/formula/tokenizer.js"), "utf8");
+const parserCode = readFileSync(path.resolve(ROOT, "dist/js/formula/parser.js"), "utf8");
+const evaluatorCode = readFileSync(path.resolve(ROOT, "dist/js/formula/evaluator.js"), "utf8");
+const coreCode = readFileSync(path.resolve(ROOT, "dist/js/core.js"), "utf8");
 
 globalThis.DOMParser = XmldomParser;
 globalThis.Node = XmldomNode;

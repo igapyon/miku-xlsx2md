@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootOfficeDrawing() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/office-drawing.js"
+    "dist/js/runtime-env.js",
+    "dist/js/office-drawing.js"
   ], "officeDrawing");
 }
 

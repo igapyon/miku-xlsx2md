@@ -6,7 +6,7 @@ const ROOT = process.cwd();
 
 const tsModule = await loadTypeScriptModule();
 transpileTypeScriptFiles(XLSX2MD_CORE_TS_ORDER, tsModule);
-console.log("[build:miku-xlsx2md] generated core JavaScript files under src/js");
+console.log("[build:miku-xlsx2md] generated core JavaScript files under dist/js");
 
 async function loadTypeScriptModule() {
   try {
@@ -26,7 +26,7 @@ function transpileTypeScriptFiles(tsOrder, tsModule) {
     const tsPath = path.resolve(ROOT, relTsPath);
     const jsPath = path.resolve(
       ROOT,
-      relTsPath.replace("/ts/", "/js/").replace(/\.ts$/, ".js")
+      relTsPath.replace("src/ts/", "dist/js/").replace(/\.ts$/, ".js")
     );
 
     const source = fs.readFileSync(tsPath, "utf8");

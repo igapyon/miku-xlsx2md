@@ -11,9 +11,9 @@ const __dirname = path.dirname(__filename);
 
 function bootRelsParser() {
   const module = bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/xml-utils.js",
-    "src/js/rels-parser.js"
+    "dist/js/runtime-env.js",
+    "dist/js/xml-utils.js",
+    "dist/js/rels-parser.js"
   ], "relsParser");
   return module.createRelsParserApi(
     globalThis.__xlsx2mdModuleRegistry.getModule("xmlUtils")

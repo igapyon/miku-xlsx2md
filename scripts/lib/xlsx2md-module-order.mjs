@@ -40,5 +40,5 @@ export const XLSX2MD_CORE_TS_ORDER = [
 ];
 
 export const XLSX2MD_CORE_JS_ORDER = XLSX2MD_CORE_TS_ORDER.map((filePath) => (
-  filePath.replace("/ts/", "/js/").replace(/\.ts$/, ".js")
+  filePath.replace("src/ts/", "dist/js/").replace(/\.ts$/, ".js")
 ));

@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootFormulaLegacy() {
-  return bootRegisteredModule(__dirname, ["src/js/formula-legacy.js"], "formulaLegacy");
+  return bootRegisteredModule(__dirname, ["dist/js/formula-legacy.js"], "formulaLegacy");
 }
 
 function createDeps(overrides = {}) {

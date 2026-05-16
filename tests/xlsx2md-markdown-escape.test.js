@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootMarkdownEscape() {
   return bootRegisteredModule(__dirname, [
-    "src/js/markdown-normalize.js",
-    "src/js/markdown-escape.js"
+    "dist/js/markdown-normalize.js",
+    "dist/js/markdown-escape.js"
   ], "markdownEscape");
 }
 

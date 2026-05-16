@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootFormulaResolver() {
-  return bootRegisteredModule(__dirname, ["src/js/formula-resolver.js"], "formulaResolver");
+  return bootRegisteredModule(__dirname, ["dist/js/formula-resolver.js"], "formulaResolver");
 }
 
 function createDeps(overrides = {}) {

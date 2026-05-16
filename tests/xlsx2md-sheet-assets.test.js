@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootSheetAssets() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/sheet-assets.js"
+    "dist/js/runtime-env.js",
+    "dist/js/sheet-assets.js"
   ], "sheetAssets");
 }
 
