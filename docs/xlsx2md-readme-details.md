@@ -50,8 +50,8 @@ git に入れない実データや一時検証用の `.xlsx` は `workplace/` �
 ## 主な特徴
 
 - 変換対象は常に全シート
-- `.xlsx` 選択後に自動で Markdown 生成まで進む
-- Markdown を主表示とし、解析系 UI は補助情報として扱う
+- CLI または downstream Web App から product core を呼び出して Markdown 生成まで進む
+- Markdown を主成果物とし、解析系情報は補助情報として扱う
 - 保存ファイル名は安全側へサニタイズする
 - レイアウト中心シートは、見た目再現ではなく `表 / リスト / 画像 / 補助セクション` への分解を優先する
 - グラフや図形についても、見た目再現より意味情報や raw metadata を Markdown へ落とすことを優先する
@@ -59,10 +59,9 @@ git に入れない実データや一時検証用の `.xlsx` は `workplace/` �
 ## 方針
 
 - 文書は `docs/` 配下に配置し、既存の `docs/text/` には入れない
-- 入出力はブラウザ内で完結し、サーバ送信を前提にしない
+- 入出力はローカルで完結し、サーバ送信を前提にしない
 - 最初の用途は「Excel 設計書を Markdown へ変換する」に置く
-- 配布形態は Single-file Web App とする
-- UI は `lht-cmn/` を利用する
+- Single-file Web App は分離済みの `miku-xlsx2md-web` repository が所有する
 - 実装の正本ソースは TypeScript とする
 - 自動テストを前提とする
 - 出力モードは `display / raw / both` を扱う
@@ -86,9 +85,11 @@ git に入れない実データや一時検証用の `.xlsx` は `workplace/` �
 
 ## 使い方
 
-1. `miku-xlsx2md.html` を開いて `.xlsx` ファイルを選択する
-2. 読み込み後、自動で全シートの Markdown が生成される
-3. 必要に応じて `display / raw / both` と変換オプションを調整し、Markdown または ZIP を保存する
+1. Node CLI に `.xlsx` ファイルを渡す
+2. 全シートの Markdown が生成される
+3. 必要に応じて `display / raw / both` と変換オプションを指定し、Markdown または ZIP を保存する
+
+ブラウザで利用する場合は `miku-xlsx2md-web` を使う。
 
 補足:
 
@@ -276,10 +277,6 @@ both: 2024/3/17 [raw=45368]
 ├── TODO.md
 ├── CONTRIBUTING.md
 ├── package.json
-├── index-src.html
-├── miku-xlsx2md-src.html
-├── index.html
-├── miku-xlsx2md.html
 ├── docs/
 │   ├── TODO.md
 │   ├── local-data-review.md
@@ -297,11 +294,8 @@ both: 2024/3/17 [raw=45368]
 ├── references/
 │   └── MS-XLSX-parser-grammar.abnf
 ├── src/
-│   ├── css/
-│   │   └── app.css
 │   ├── ts/
 │   │   ├── core.ts
-│   │   ├── main.ts
 │   │   ├── sheet-markdown.ts
 │   │   ├── table-detector.ts
 │   │   ├── markdown-export.ts
@@ -311,7 +305,6 @@ both: 2024/3/17 [raw=45368]
 │   │       └── evaluator.ts
 │   └── js/
 │       ├── core.js
-│       ├── main.js
 │       ├── sheet-markdown.js
 │       ├── table-detector.js
 │       ├── markdown-export.js

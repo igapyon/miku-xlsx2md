@@ -4,12 +4,6 @@ This document lists third-party software and reference materials used or referre
 
 ## Third-party software
 
-### Material Web (`@material/web`)
-
-- Usage: Used for parts of the UI implementation
-- License: Apache License 2.0
-- Source: https://github.com/material-components/material-web
-
 ### XML DOM (`@xmldom/xmldom`)
 
 - Usage: Used by the Node CLI runtime for XML parsing
@@ -43,12 +37,6 @@ This document lists third-party software and reference materials used or referre
 この文書は、`miku-xlsx2md` が利用または参照している第三者ソフトウェアおよび参考資料を記載したものです。
 
 ## 第三者ソフトウェア
-
-### Material Web (`@material/web`)
-
-- 用途: UI 実装の一部で利用
-- ライセンス: Apache License 2.0
-- Source: https://github.com/material-components/material-web
 
 ### XML DOM (`@xmldom/xmldom`)
 
