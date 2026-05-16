@@ -2,3 +2,5 @@
 local-data/
 workplace/
 node_modules/
+bundle/
+release-assets/

@@ -12,8 +12,32 @@ Feature and implementation backlog remains in [docs/TODO.md](./docs/TODO.md).
 - [x] Keep product core, CLI, diagnostics, fixtures, and core tests in this repository
 - [x] Retarget `npm run build` to regenerate core JavaScript instead of Web HTML
 - [x] Update README / CONTRIBUTING / notices for the main application role
-- [ ] Publish or document a formal upstream runtime release asset for `miku-xlsx2md-web`
+- [x] Document and automate formal upstream runtime release assets for `miku-xlsx2md-web`
 - [ ] Revisit whether `src/js/` should remain tracked or move to an ignored runtime output directory after the downstream runtime asset contract is finalized
+
+## Runtime Release Asset Contract
+
+Local commands:
+
+- `npm run build:runtime`
+- `npm run smoke:runtime`
+- `npm run stage:runtime-release`
+
+Local generated files:
+
+- `bundle/miku-xlsx2md-runtime.mjs`
+- `bundle/miku-xlsx2md-runtime.json`
+
+GitHub Release assets:
+
+- `miku-xlsx2md-runtime-<version>.mjs`
+- `miku-xlsx2md-runtime-<version>.json`
+
+Workflow:
+
+- `.github/workflows/release-runtime-bundle.yml`
+- Trigger: `v*` tag push
+- Responsibility: build/test main app, build runtime bundle, smoke runtime bundle, stage release assets, upload release assets to the matching GitHub Release
 
 ## Ownership
 

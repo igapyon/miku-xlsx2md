@@ -115,6 +115,18 @@ describe("xlsx2md cli", () => {
     expect(result.stdout).toContain("Exit codes:");
   });
 
+  it("prints version and exits successfully", async () => {
+    const result = await execFileAsync(process.execPath, [
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
+      "--version"
+    ], {
+      cwd: path.resolve(__dirname, "..")
+    });
+
+    expect(result.stdout.trim()).toBe("1.0.0");
+    expect(result.stderr).toBe("");
+  });
+
   it("fails for an unknown option", async () => {
     await expect(execFileAsync(process.execPath, [
       path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),

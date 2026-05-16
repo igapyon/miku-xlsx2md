@@ -3,12 +3,16 @@ import path from "node:path";
 
 import { loadXlsx2mdNodeApi } from "./lib/xlsx2md-node-runtime.mjs";
 
+const PACKAGE_JSON_URL = new URL("../package.json", import.meta.url);
 const SHAPE_DETAILS_MODES = ["include", "exclude"];
 const ENCODINGS = ["utf-8", "shift_jis", "utf-16le", "utf-16be", "utf-32le", "utf-32be"];
 const BOM_MODES = ["off", "on"];
 const FLAG_OPTIONS = {
   "--help"(options) {
     options.help = true;
+  },
+  "--version"(options) {
+    options.version = true;
   },
   "--include-shape-details"(options) {
     options.includeShapeDetails = true;
@@ -49,6 +53,7 @@ Options:
   --keep-empty-rows             Keep empty rows
   --keep-empty-columns          Keep empty columns
   --summary                     Print per-sheet summary to stdout
+  --version                     Show version and exit
   --help                        Show this help and exit
 
 GUI-aligned defaults:
@@ -58,6 +63,11 @@ Exit codes:
   0                             Success
   1                             Error
 `);
+}
+
+async function readPackageVersion() {
+  const packageJson = JSON.parse(await fs.readFile(PACKAGE_JSON_URL, "utf8"));
+  return packageJson.version || "0.0.0";
 }
 
 function normalizeEnumOption(value, allowedValues, label, aliases = {}) {
@@ -208,6 +218,10 @@ function printWorkbookSummary(api, workbookName, files) {
 async function main() {
   const api = loadXlsx2mdNodeApi();
   const options = parseArgs(process.argv.slice(2), api.markdownOptions);
+  if (options.version) {
+    console.log(await readPackageVersion());
+    process.exit(0);
+  }
   if (options.help || !options.inputPath) {
     printHelp();
     process.exit(options.help ? 0 : 1);
