@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootXmlUtils() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/xml-utils.js"
+    "dist/js/runtime-env.js",
+    "dist/js/xml-utils.js"
   ], "xmlUtils");
 }
 

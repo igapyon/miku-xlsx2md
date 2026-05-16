@@ -71,7 +71,7 @@ npm install
 npm run build
 ```
 
-`npm run build` transpiles the TypeScript product core into `src/js/` and then runs the test suite. `src/ts/` is the source of truth; `src/js/` is retained as the current Node/runtime generated output used by tests, the CLI runtime helper, and downstream runtime refresh workflows.
+`npm run build` transpiles the TypeScript product core into `dist/js/` through the test pre-step and then runs the test suite. `src/ts/` is the source of truth; `dist/js/` is ignored generated output used by tests, the CLI runtime helper, and runtime bundle generation.
 
 Generated browser HTML files are no longer owned by this repository. Build and release the browser app from `miku-xlsx2md-web`.
 
@@ -165,7 +165,7 @@ npm install
 npm run build
 ```
 
-`npm run build` は TypeScript の product core を `src/js/` へ変換し、その後テストを実行します。`src/ts/` が正本であり、`src/js/` は現時点の Node/runtime 用生成物として残しています。
+`npm run build` はテスト前処理で TypeScript の product core を `dist/js/` へ変換し、その後テストを実行します。`src/ts/` が正本であり、`dist/js/` はテスト、CLI runtime helper、runtime bundle 生成が利用する Git 管理外の生成物です。
 
 ブラウザ向け HTML 生成物はこのリポジトリの所有物ではありません。Web App のビルドとリリースは `miku-xlsx2md-web` で行います。
 

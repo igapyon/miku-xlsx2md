@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootNarrativeStructure() {
   return bootRegisteredModule(__dirname, [
-    "src/js/markdown-normalize.js",
-    "src/js/narrative-structure.js"
+    "dist/js/markdown-normalize.js",
+    "dist/js/narrative-structure.js"
   ], "narrativeStructure");
 }
 

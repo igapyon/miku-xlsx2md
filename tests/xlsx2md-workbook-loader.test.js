@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootWorkbookLoader() {
-  return bootRegisteredModule(__dirname, ["src/js/workbook-loader.js"], "workbookLoader");
+  return bootRegisteredModule(__dirname, ["dist/js/workbook-loader.js"], "workbookLoader");
 }
 
 describe("xlsx2md workbook loader", () => {

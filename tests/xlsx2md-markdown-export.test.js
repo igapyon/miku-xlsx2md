@@ -11,11 +11,11 @@ const __dirname = path.dirname(__filename);
 
 function bootMarkdownExport() {
   return bootRegisteredModule(__dirname, [
-    "src/js/zip-io.js",
-    "src/js/markdown-normalize.js",
-    "src/js/markdown-table-escape.js",
-    "src/js/text-encoding.js",
-    "src/js/markdown-export.js"
+    "dist/js/zip-io.js",
+    "dist/js/markdown-normalize.js",
+    "dist/js/markdown-table-escape.js",
+    "dist/js/text-encoding.js",
+    "dist/js/markdown-export.js"
   ], "markdownExport");
 }
 

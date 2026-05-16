@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootFormulaEngine() {
-  return bootRegisteredModule(__dirname, ["src/js/formula-engine.js"], "formulaEngine");
+  return bootRegisteredModule(__dirname, ["dist/js/formula-engine.js"], "formulaEngine");
 }
 
 describe("xlsx2md formula engine", () => {

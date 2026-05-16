@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootRichTextPlainFormatter() {
-  return bootRegisteredModule(__dirname, ["src/js/rich-text-plain-formatter.js"], "richTextPlainFormatter")
+  return bootRegisteredModule(__dirname, ["dist/js/rich-text-plain-formatter.js"], "richTextPlainFormatter")
     .createRichTextPlainFormatterApi();
 }
 

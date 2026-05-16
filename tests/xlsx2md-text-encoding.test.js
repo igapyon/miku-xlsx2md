@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootTextEncoding() {
-  return bootRegisteredModule(__dirname, ["src/js/text-encoding.js"], "textEncoding");
+  return bootRegisteredModule(__dirname, ["dist/js/text-encoding.js"], "textEncoding");
 }
 
 describe("xlsx2md text encoding", () => {

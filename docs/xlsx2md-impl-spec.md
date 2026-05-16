@@ -52,7 +52,7 @@
 本書の記述基準は次の通りである。
 
 - 現行コードの正本は `src/ts/` 配下の TypeScript product core 実装とする
-- `src/js/` 配下は Node/runtime 用の生成物として扱う
+- `dist/js/` 配下は Node/runtime 用の Git 管理外生成物として扱う
 - Single-file Web App 生成物は分離済みの `miku-xlsx2md-web` repository が所有する
 - 実装と既存文書に差分がある場合、本書では現行実装を基準に記述する
 - 未対応事項や将来検討事項は、実装済み仕様と分けて記述する
@@ -1309,8 +1309,8 @@ ZIP の保存名には Workbook 名を使う。
 
 ### 生成物
 
-- `src/js/*.js`
-  - TypeScript からの生成物
+- `dist/js/*.js`
+  - TypeScript からの Git 管理外生成物
 
 本書の記述基準は TypeScript 実装であり、生成物はその反映結果として扱う。
 

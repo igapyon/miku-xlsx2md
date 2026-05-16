@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootSharedStrings() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/shared-strings.js"
+    "dist/js/runtime-env.js",
+    "dist/js/shared-strings.js"
   ], "sharedStrings");
 }
 

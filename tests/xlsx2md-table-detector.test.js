@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootTableDetector() {
   return bootRegisteredModule(__dirname, [
-    "src/js/border-grid.js",
-    "src/js/table-detector.js"
+    "dist/js/border-grid.js",
+    "dist/js/table-detector.js"
   ], "tableDetector");
 }
 

@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootStylesParser() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/styles-parser.js"
+    "dist/js/runtime-env.js",
+    "dist/js/styles-parser.js"
   ], "stylesParser");
 }
 

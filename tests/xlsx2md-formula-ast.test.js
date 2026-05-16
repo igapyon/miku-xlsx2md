@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootFormulaAst() {
-  return bootRegisteredModule(__dirname, ["src/js/formula-ast.js"], "formulaAst");
+  return bootRegisteredModule(__dirname, ["dist/js/formula-ast.js"], "formulaAst");
 }
 
 function createDeps() {

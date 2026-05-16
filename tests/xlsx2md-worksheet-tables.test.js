@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 function bootWorksheetTables() {
   return bootRegisteredModule(__dirname, [
-    "src/js/runtime-env.js",
-    "src/js/worksheet-tables.js"
+    "dist/js/runtime-env.js",
+    "dist/js/worksheet-tables.js"
   ], "worksheetTables");
 }
 

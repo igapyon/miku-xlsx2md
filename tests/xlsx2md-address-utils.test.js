@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootAddressUtils() {
-  return bootRegisteredModule(__dirname, ["src/js/address-utils.js"], "addressUtils");
+  return bootRegisteredModule(__dirname, ["dist/js/address-utils.js"], "addressUtils");
 }
 
 describe("xlsx2md address utils", () => {

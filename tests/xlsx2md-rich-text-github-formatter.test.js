@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootRichTextGithubFormatter() {
-  return bootRegisteredModule(__dirname, ["src/js/rich-text-github-formatter.js"], "richTextGithubFormatter")
+  return bootRegisteredModule(__dirname, ["dist/js/rich-text-github-formatter.js"], "richTextGithubFormatter")
     .createRichTextGithubFormatterApi();
 }
 
