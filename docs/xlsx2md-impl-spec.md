@@ -51,8 +51,9 @@
 
 本書の記述基準は次の通りである。
 
-- 現行コードの正本は `src/ts/` 配下の TypeScript 実装とする
-- `js/` 配下および `miku-xlsx2md.html` はビルド生成物として扱う
+- 現行コードの正本は `src/ts/` 配下の TypeScript product core 実装とする
+- `src/js/` 配下は Node/runtime 用の生成物として扱う
+- Single-file Web App 生成物は分離済みの `miku-xlsx2md-web` repository が所有する
 - 実装と既存文書に差分がある場合、本書では現行実装を基準に記述する
 - 未対応事項や将来検討事項は、実装済み仕様と分けて記述する
 
@@ -62,8 +63,8 @@
 
 `xlsx2md` の現行実装における全体処理フローは概ね次の通りである。
 
-1. ユーザーがブラウザ UI で `.xlsx` ファイルを選択する
-2. 入力ファイルを ArrayBuffer として読み込む
+1. CLI や downstream Web App が `.xlsx` ファイルを ArrayBuffer として読み込む
+2. product core API に入力ファイル名と ArrayBuffer を渡す
 3. `.xlsx` を ZIP として展開し、必要な XML ファイルを取得する
 4. `workbook.xml`、worksheet XML、rels、`sharedStrings.xml`、`styles.xml` などを解析する
 5. Workbook / Sheet / Cell / Merge / Table / Image / Chart / Shape の内部モデルを構築する
@@ -1284,18 +1285,18 @@ ZIP の保存名には Workbook 名を使う。
 - `src/ts/formula/evaluator.ts`
   - AST 評価
 
-### UI
+### Entrypoints
 
-- `src/ts/main.ts`
-  - 画面操作
+- `scripts/miku-xlsx2md-cli.mjs`
+  - Node.js CLI
   - オプション取得
-  - 解析サマリー表示
-  - 表候補スコア表示
-  - 数式診断表示
-  - ダウンロード / ZIP 保存
+  - Markdown / ZIP 出力
 
-- `src/css/app.css`
-  - `xlsx2md` 画面固有の見た目
+- `scripts/lib/xlsx2md-node-runtime.mjs`
+  - Node runtime helper
+  - DOM / Blob / ZIP inflate など Node 側 runtime 差分の吸収
+
+ブラウザ UI は分離済みの `miku-xlsx2md-web` repository が所有する。
 
 ### テスト
 
@@ -1310,8 +1311,6 @@ ZIP の保存名には Workbook 名を使う。
 
 - `src/js/*.js`
   - TypeScript からの生成物
-- `miku-xlsx2md.html`
-  - single-file Web App の生成物
 
 本書の記述基準は TypeScript 実装であり、生成物はその反映結果として扱う。
 
@@ -1769,9 +1768,9 @@ function createExportEntries(workbook: ParsedWorkbook, markdownFiles: MarkdownFi
 
 `createCombinedMarkdownExportFile(...)` は現行実装では `{ fileName, content }` を返すだけで、`content` は未エンコードの文字列である。保存時の文字コード選択はここでは行っていない。
 
-`createExportEntries(...)` は現行実装では専用の text-encoding 層を経由して Markdown をバイト列化する。`utf-8`、`utf-16le`、`utf-16be`、`utf-32le`、`utf-32be` はブラウザ / Node で扱える。`shift_jis` は Node 側では `iconv-lite` を使ってエンコードできるが、ブラウザ単体 runtime では利用できない前提である。
+`createExportEntries(...)` は現行実装では専用の text-encoding 層を経由して Markdown をバイト列化する。`utf-8`、`utf-16le`、`utf-16be`、`utf-32le`、`utf-32be` は Node runtime と downstream Web App で扱える。`shift_jis` は Node 側では `iconv-lite` を使ってエンコードできるが、ブラウザ単体 runtime では利用できない前提である。
 
-そのため UI 層では runtime 可用性に応じて `shift_jis` を無効化し、Node CLI では `shift_jis` を有効な保存経路として扱う。
+そのため Web App 側では runtime 可用性に応じて `shift_jis` を無効化し、Node CLI では `shift_jis` を有効な保存経路として扱う。
 
 ### 22.7 今後の付録追加候補
 

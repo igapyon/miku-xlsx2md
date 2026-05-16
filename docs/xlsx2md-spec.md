@@ -73,8 +73,8 @@
 
 ### 3.3 実装方針
 
-- 配布形態は Single-file Web App とする
-- 画面 UI は `lht-cmn/` を正本とし、原則 `lht-*` コンポーネントを利用する
+- `miku-xlsx2md` main repository は TypeScript / Node.js の product core と CLI を所有する
+- Single-file Web App と画面 UI は分離済みの `miku-xlsx2md-web` repository が所有する
 - 実装の正本ソースは TypeScript とする
 - 自動テストを前提とし、主要な変換ロジックには継続的にテストを追加する
 
@@ -813,7 +813,9 @@ Workbook 名はトレーサビリティ上必須のため、各 Markdown に必�
 
 ### 16.2 UI 実装方針
 
-- 画面実装では `lht-cmn/README.md` の方針に従う
+画面実装は分離済みの `miku-xlsx2md-web` repository が所有する。以下は Web App 側で維持する方針である。
+
+- 画面実装では Web App repository 側の `lht-cmn/README.md` の方針に従う
 - `md-*` を画面側で直接多用せず、原則 `lht-*` を利用する
 - 単一 HTML 配布を維持しつつ、開発時は `*-src.html` と分割ソースで保守する
 - Markdown を主表示とし、解析サマリーはその下へ置く
@@ -865,14 +867,13 @@ ImageAsset
 
 ## 18. 技術方針
 
-- 単一 HTML で配布する
+- Node.js CLI と downstream runtime refresh が利用できる product core を維持する
 - 文書は `docs/` 配下に配置する
-- ビルド方式は既存の `*-src.html` + 単一 HTML 生成パターンを踏襲する
+- Web App の単一 HTML 生成は `miku-xlsx2md-web` で扱う
 - 可能な限り依存を増やさず、必要なら最小限の同梱を検討する
-- ローカルブラウザ内で完結し、サーバ送信を前提にしない
-- UI 共通部品は `lht-cmn/` を利用する
+- ローカル処理を基本とし、サーバ送信を前提にしない
 - アプリ本体ロジックの正本ソースは `src/ts/*.ts` とする
-- 配布用 JavaScript は TypeScript から生成する
+- Runtime 用 JavaScript は TypeScript から生成する
 - テストは自動実行可能な形で `tests/` に配置する
 
 ### 18.1 想定ディレクトリ構成
@@ -884,16 +885,13 @@ ImageAsset
 │   ├── xlsx2md-spec.md
 │   ├── xlsx2md-impl-spec.md
 │   └── xlsx-formula-subset.md
-├── miku-xlsx2md-src.html
-├── miku-xlsx2md.html
+├── scripts/
+│   ├── miku-xlsx2md-cli.mjs
+│   └── lib/
 ├── src/
-│   ├── css/
-│   │   └── app.css
 │   ├── ts/
-│   │   ├── main.ts
 │   │   └── ...
 │   └── js/
-│       ├── main.js
 │       └── ...
 └── tests/
     └── xlsx2md-main.test.js
@@ -1084,11 +1082,8 @@ ImageAsset
 - 単純な表候補スコアリング
 - 数式セルの cached value / 式文字列フォールバック対応
 - Workbook 名 / Sheet 名 / Range の保持
-- Markdown コピー
-- エラー表示
 - ローカル完結
-- Single-file Web App としてビルド可能
-- `lht-cmn` 利用
+- Node.js CLI から利用可能
 - TypeScript 正本ソース
 - 自動テストあり
 
