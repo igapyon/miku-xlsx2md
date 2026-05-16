@@ -57,3 +57,14 @@ Web App repository owns:
 - Web smoke tests
 - Web release assets
 - vendored upstream runtime artifact used by the browser app
+
+## Verification Log
+
+- [x] 2026-05-17 `npm test`
+  - Passed: 35 test files, 334 tests
+- [x] 2026-05-17 `npm run build:runtime`
+  - Generated ignored local runtime files under `bundle/`
+- [x] 2026-05-17 `npm run smoke:runtime`
+  - Passed for version `1.0.0`
+- [x] 2026-05-17 `npm run stage:runtime-release`
+  - Staged ignored local release assets under `release-assets/`
