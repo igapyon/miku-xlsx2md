@@ -75,6 +75,28 @@ npm run build
 
 Generated browser HTML files are no longer owned by this repository. Build and release the browser app from `miku-xlsx2md-web`.
 
+## Runtime Bundle
+
+This repository publishes the upstream runtime bundle consumed by downstream surfaces such as `miku-xlsx2md-web`.
+
+```bash
+npm run build:runtime
+npm run smoke:runtime
+npm run stage:runtime-release
+```
+
+Generated local artifacts:
+
+- `bundle/miku-xlsx2md-runtime.mjs`
+- `bundle/miku-xlsx2md-runtime.json`
+
+Release asset names:
+
+- `miku-xlsx2md-runtime-<version>.mjs`
+- `miku-xlsx2md-runtime-<version>.json`
+
+The GitHub Actions workflow `.github/workflows/release-runtime-bundle.yml` runs on `v*` tags, builds and tests the main application, builds the runtime bundle, runs the runtime smoke check, stages release assets, and uploads them to the matching GitHub Release.
+
 ## Tech Stack
 
 - Runtime: Node.js
@@ -146,3 +168,25 @@ npm run build
 `npm run build` は TypeScript の product core を `src/js/` へ変換し、その後テストを実行します。`src/ts/` が正本であり、`src/js/` は現時点の Node/runtime 用生成物として残しています。
 
 ブラウザ向け HTML 生成物はこのリポジトリの所有物ではありません。Web App のビルドとリリースは `miku-xlsx2md-web` で行います。
+
+## Runtime Bundle
+
+このリポジトリは、`miku-xlsx2md-web` などの downstream surface が利用する upstream runtime bundle を提供します。
+
+```bash
+npm run build:runtime
+npm run smoke:runtime
+npm run stage:runtime-release
+```
+
+ローカル生成物:
+
+- `bundle/miku-xlsx2md-runtime.mjs`
+- `bundle/miku-xlsx2md-runtime.json`
+
+GitHub Release asset 名:
+
+- `miku-xlsx2md-runtime-<version>.mjs`
+- `miku-xlsx2md-runtime-<version>.json`
+
+`.github/workflows/release-runtime-bundle.yml` は `v*` tag push で動作し、main application の build/test、runtime bundle 生成、runtime smoke、release asset staging、GitHub Release への upload を行います。
