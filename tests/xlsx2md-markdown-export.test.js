@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 
 function bootMarkdownExport() {
   return bootRegisteredModule(__dirname, [
+    "dist/js/ms-office-core.js",
     "dist/js/zip-io.js",
     "dist/js/markdown-normalize.js",
     "dist/js/markdown-table-escape.js",

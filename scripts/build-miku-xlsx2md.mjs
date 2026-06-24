@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { transform } from "esbuild";
 import { XLSX2MD_CORE_TS_ORDER } from "./lib/xlsx2md-module-order.mjs";
 
 const ROOT = process.cwd();
+const CORE_VENDOR_PATH = "src/vendor/miku-ms-office-core-0.5.0.1.mjs";
 
 const tsModule = await loadTypeScriptModule();
+await generateMsOfficeCoreAdapter();
 transpileTypeScriptFiles(XLSX2MD_CORE_TS_ORDER, tsModule);
 console.log("[build:miku-xlsx2md] generated core JavaScript files under dist/js");
 
@@ -19,6 +22,26 @@ async function loadTypeScriptModule() {
       `Cause: ${reason}`
     );
   }
+}
+
+async function generateMsOfficeCoreAdapter() {
+  const vendorPath = path.resolve(ROOT, CORE_VENDOR_PATH);
+  const jsPath = path.resolve(ROOT, "dist/js/ms-office-core.js");
+  const source = fs.readFileSync(vendorPath, "utf8");
+  const result = await transform(source, {
+    format: "iife",
+    globalName: "__mikuMsOfficeCoreRelease",
+    target: "es2019"
+  });
+  const adapter = `${result.code}
+(() => {
+  const moduleRegistry = getXlsx2mdModuleRegistry();
+  moduleRegistry.registerModule("msOfficeCore", __mikuMsOfficeCoreRelease);
+})();
+`;
+
+  fs.mkdirSync(path.dirname(jsPath), { recursive: true });
+  fs.writeFileSync(jsPath, adapter, "utf8");
 }
 
 function transpileTypeScriptFiles(tsOrder, tsModule) {
