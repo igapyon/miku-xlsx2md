@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function bootZipIo() {
-  return bootRegisteredModule(__dirname, ["dist/js/zip-io.js"], "zipIo");
+  return bootRegisteredModule(__dirname, ["dist/js/ms-office-core.js", "dist/js/zip-io.js"], "zipIo");
 }
 
 describe("xlsx2md zip io", () => {

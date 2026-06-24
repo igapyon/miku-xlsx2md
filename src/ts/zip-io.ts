@@ -5,14 +5,6 @@
 
 (() => {
   const moduleRegistry = getXlsx2mdModuleRegistry();
-  type ZipEntryRecord = {
-    name: string;
-    compressionMethod: number;
-    compressedSize: number;
-    uncompressedSize: number;
-    localHeaderOffset: number;
-  };
-
   type ExportEntry = {
     name: string;
     data: Uint8Array;
@@ -23,7 +15,17 @@
     dosDate: number;
   };
 
-  const textDecoder = new TextDecoder("utf-8");
+  const msOfficeCore = moduleRegistry.getModule<{
+    readZipPackageAsync: (
+      data: Uint8Array,
+      options?: {
+        inflateRaw?: (data: Uint8Array, expectedSize: number, path: string) => Promise<Uint8Array> | Uint8Array;
+      }
+    ) => Promise<{
+      diagnostics: { severity: string; code: string; message: string; path?: string }[];
+      entries: { path: string; data: Uint8Array }[];
+    }>;
+  }>("msOfficeCore");
   const textEncoder = new TextEncoder();
   const nodeRequire = (() => {
     const candidate = (globalThis as typeof globalThis & {
@@ -55,10 +57,6 @@
     return (crc ^ 0xffffffff) >>> 0;
   }
 
-  function decodeXmlText(bytes: Uint8Array): string {
-    return textDecoder.decode(bytes);
-  }
-
   function hasNonAsciiCharacters(value: string): boolean {
     return /[^\x00-\x7f]/.test(value);
   }
@@ -80,14 +78,6 @@
     };
   }
 
-  function readUint16LE(view: DataView, offset: number): number {
-    return view.getUint16(offset, true);
-  }
-
-  function readUint32LE(view: DataView, offset: number): number {
-    return view.getUint32(offset, true);
-  }
-
   async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
     if (typeof DecompressionStream === "function") {
       try {
@@ -107,68 +97,25 @@
   }
 
   async function unzipEntries(arrayBuffer: ArrayBuffer): Promise<Map<string, Uint8Array>> {
-    const view = new DataView(arrayBuffer);
-    let eocdOffset = -1;
-    for (let offset = view.byteLength - 22; offset >= Math.max(0, view.byteLength - 0x10000 - 22); offset -= 1) {
-      if (readUint32LE(view, offset) === 0x06054b50) {
-        eocdOffset = offset;
-        break;
-      }
+    if (!msOfficeCore) {
+      throw new Error("miku-ms-office-core module is not loaded.");
     }
-    if (eocdOffset < 0) {
-      throw new Error("ZIP end-of-central-directory record was not found.");
-    }
-
-    const centralDirectorySize = readUint32LE(view, eocdOffset + 12);
-    const centralDirectoryOffset = readUint32LE(view, eocdOffset + 16);
-    const endOffset = centralDirectoryOffset + centralDirectorySize;
-    const entries: ZipEntryRecord[] = [];
-    let cursor = centralDirectoryOffset;
-
-    while (cursor < endOffset) {
-      if (readUint32LE(view, cursor) !== 0x02014b50) {
-        throw new Error("ZIP central directory format is invalid.");
-      }
-      const compressionMethod = readUint16LE(view, cursor + 10);
-      const compressedSize = readUint32LE(view, cursor + 20);
-      const uncompressedSize = readUint32LE(view, cursor + 24);
-      const fileNameLength = readUint16LE(view, cursor + 28);
-      const extraFieldLength = readUint16LE(view, cursor + 30);
-      const fileCommentLength = readUint16LE(view, cursor + 32);
-      const localHeaderOffset = readUint32LE(view, cursor + 42);
-      const fileNameBytes = new Uint8Array(arrayBuffer, cursor + 46, fileNameLength);
-      const name = decodeXmlText(fileNameBytes);
-      entries.push({
-        name,
-        compressionMethod,
-        compressedSize,
-        uncompressedSize,
-        localHeaderOffset
-      });
-      cursor += 46 + fileNameLength + extraFieldLength + fileCommentLength;
+    const result = await msOfficeCore.readZipPackageAsync(new Uint8Array(arrayBuffer), {
+      inflateRaw
+    });
+    const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+    if (errors.length > 0) {
+      throw new Error(errors.map((diagnostic) => {
+        if (diagnostic.code === "zip.eocd.missing") {
+          return "ZIP end-of-central-directory record was not found.";
+        }
+        return diagnostic.path ? `${diagnostic.path}: ${diagnostic.message}` : diagnostic.message;
+      }).join("\n"));
     }
 
     const files = new Map<string, Uint8Array>();
-    for (const entry of entries) {
-      const localOffset = entry.localHeaderOffset;
-      if (readUint32LE(view, localOffset) !== 0x04034b50) {
-        throw new Error(`ZIP local header is invalid: ${entry.name}`);
-      }
-      const fileNameLength = readUint16LE(view, localOffset + 26);
-      const extraFieldLength = readUint16LE(view, localOffset + 28);
-      const dataOffset = localOffset + 30 + fileNameLength + extraFieldLength;
-      const compressedData = new Uint8Array(arrayBuffer, dataOffset, entry.compressedSize);
-
-      let fileData: Uint8Array;
-      if (entry.compressionMethod === 0) {
-        fileData = new Uint8Array(compressedData);
-      } else if (entry.compressionMethod === 8) {
-        fileData = await inflateRaw(compressedData);
-      } else {
-        throw new Error(`Unsupported compression method: ${entry.name} (method=${entry.compressionMethod})`);
-      }
-
-      files.set(entry.name, fileData);
+    for (const entry of result.entries) {
+      files.set(entry.path, entry.data);
     }
 
     return files;

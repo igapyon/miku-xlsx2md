@@ -39,6 +39,11 @@ export const XLSX2MD_CORE_TS_ORDER = [
   "src/ts/core.ts"
 ];
 
-export const XLSX2MD_CORE_JS_ORDER = XLSX2MD_CORE_TS_ORDER.map((filePath) => (
-  filePath.replace("src/ts/", "dist/js/").replace(/\.ts$/, ".js")
-));
+export const XLSX2MD_CORE_JS_ORDER = [
+  "dist/js/module-registry.js",
+  "dist/js/module-registry-access.js",
+  "dist/js/ms-office-core.js",
+  ...XLSX2MD_CORE_TS_ORDER
+    .slice(2)
+    .map((filePath) => filePath.replace("src/ts/", "dist/js/").replace(/\.ts$/, ".js"))
+];
