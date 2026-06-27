@@ -112,6 +112,11 @@ describe("xlsx2md cli", () => {
     expect(result.stdout).toContain("GUI-aligned defaults:");
     expect(result.stdout).toContain("formatting-mode=github");
     expect(result.stdout).toContain("shape-details=exclude");
+    expect(result.stdout).toContain("Output contract for agents:");
+    expect(result.stdout).toContain("YAML front matter");
+    expect(result.stdout).toContain("sources[0].path");
+    expect(result.stdout).toContain("Stable topic values:");
+    expect(result.stdout).toContain("workbook-conversion");
     expect(result.stdout).toContain("Exit codes:");
   });
 
@@ -123,7 +128,7 @@ describe("xlsx2md cli", () => {
       cwd: path.resolve(__dirname, "..")
     });
 
-    expect(result.stdout.trim()).toBe("1.1.0");
+    expect(result.stdout.trim()).toBe("1.2.0");
     expect(result.stderr).toBe("");
   });
 

@@ -38,6 +38,11 @@ function printHelp() {
   console.log(`Usage:
   node scripts/miku-xlsx2md-cli.mjs <input.xlsx> [options]
 
+Purpose:
+  Convert one local Excel .xlsx workbook into AI-friendly, human-reviewable Markdown.
+  The conversion extracts workbook structure and semantic content; it does not try to
+  reproduce the exact Excel visual layout.
+
 Options:
   --out <file>                  Write combined Markdown to this file
   --zip <file>                  Write ZIP export to this file
@@ -58,6 +63,24 @@ Options:
 
 GUI-aligned defaults:
   output-mode=display, formatting-mode=github, table-detection-mode=balanced, shape-details=exclude
+
+Output contract for agents:
+  - The primary Markdown output is one workbook-level combined Markdown document.
+  - ZIP output contains output/<workbook>.md plus extracted assets under output/assets/.
+  - Combined Markdown always starts with YAML front matter, then "# Book: <workbook>",
+    followed by "## Sheet: <sheet>" sections in workbook sheet order.
+  - sources[0].path in front matter is the input path passed to this CLI.
+  - created and updated are generation dates. Use the core export API generatedDate
+    option, not a CLI flag, when deterministic fixture output is required.
+  - Use --summary for machine-readable-ish progress logs; use the Markdown front
+    matter and body as the durable conversion artifact.
+
+Front matter fields:
+  title, description, type, category, topics, status, audience, created, updated,
+  sources, conversion
+
+Stable topic values:
+  converted, xlsx, markdown, miku-xlsx2md, workbook-conversion
 
 Exit codes:
   0                             Success
@@ -268,16 +291,23 @@ async function main() {
       printWorkbookSummary(api, path.basename(inputPath), files);
     }
 
+    const packageVersion = await readPackageVersion();
     const combined = api.createCombinedMarkdownExportPayload(workbook, files, {
       encoding: options.encoding,
-      bom: options.bom
+      bom: options.bom,
+      sourcePath: options.inputPath,
+      toolVersion: packageVersion,
+      shapeDetails: options.includeShapeDetails ? "include" : "exclude"
     });
 
     if (options.zipPath) {
       try {
         const zipBytes = api.createWorkbookExportArchive(workbook, files, {
           encoding: options.encoding,
-          bom: options.bom
+          bom: options.bom,
+          sourcePath: options.inputPath,
+          toolVersion: packageVersion,
+          shapeDetails: options.includeShapeDetails ? "include" : "exclude"
         });
         await writeBinaryFile(path.resolve(options.zipPath), zipBytes);
       } catch (error) {

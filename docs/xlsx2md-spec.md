@@ -18,6 +18,8 @@
   - 人間が意図、対象範囲、設計方針を理解するための橋渡し文書
 - `xlsx2md-impl-spec.md`
   - 現行実装の詳細挙動、内部状態、再実装・保守のための文書
+- `xlsx2md-front-matter.md`
+  - 生成 Markdown の YAML front matter 契約を整理する文書
 - `xlsx-formula-subset.md`
   - 数式対応範囲の補助文書
 
@@ -259,16 +261,45 @@ node scripts/miku-xlsx2md-cli.mjs sample.xlsx --zip sample-sjis.zip --encoding s
 
 ### 5.1 基本構造
 
-各 Markdown は、以下の構造を基本とする。
+保存または ZIP 出力される Workbook 単位の連結 Markdown は、YAML front matter と本文を持つ構造を基本とする。
+
+front matter の詳細なフィールド契約は [xlsx2md-front-matter.md](./xlsx2md-front-matter.md) を参照する。
 
 ```markdown
-# Summary
+---
+title: "sales.xlsx"
+description: "Excel workbook converted to Markdown by miku-xlsx2md."
+type: converted
+category: converted
+topics:
+  - converted
+  - xlsx
+  - markdown
+  - miku-xlsx2md
+  - workbook-conversion
+status: generated
+audience:
+  - human
+  - agent
+  - maintainer
+created: "2026-06-27"
+updated: "2026-06-27"
+sources:
+  - type: local-file
+    path: "sales.xlsx"
+    role: primary
+conversion:
+  tool: miku-xlsx2md
+  version: "1.2.0"
+  output_mode: display
+  formatting_mode: github
+  table_detection_mode: balanced
+  shape_details: exclude
+---
 
-## ソース情報
-- Workbook: sales.xlsx
-- Sheet: Summary
+# Book: sales.xlsx
 
-## 本文
+## Sheet: Summary
 
 このシステムは XXX です。
 YYY システムとの連携を ZZZ です。
@@ -300,9 +331,42 @@ YYY システムとの連携を ZZZ です。
 - 必要に応じてグラフ情報
 - 必要に応じて図形情報
 
-### 5.3 ソース情報
+### 5.3 Front Matter とソース情報
 
-トレーサビリティ確保のため、各 Markdown 冒頭に以下を必ず出力する。
+Workbook 単位の連結 Markdown には、先頭に YAML front matter を常時付与する。
+
+front matter は、文書メタ情報、入力元、変換設定を機械可読に残すためのものであり、本文の詳細診断を過度に詰め込まない。
+
+詳細な field contract、stable values、agent reading guidance は [xlsx2md-front-matter.md](./xlsx2md-front-matter.md) に置く。
+
+生成 AI や自動処理は、front matter を Workbook 変換成果物の入口メタデータとして扱ってよい。ただし、本文の完全な構造や診断詳細を front matter だけから復元しようとしてはならない。詳細な変換結果は Markdown 本文、summary、または将来の sidecar artifact を読む。
+
+少なくとも次の情報を保持する。
+
+- `title`: Workbook 名
+- `description`: `miku-xlsx2md` による Excel Workbook 変換出力であることを示す短い説明
+- `type`: `converted`
+- `category`: `converted`
+- `topics`: `converted`、`xlsx`、`markdown`、`miku-xlsx2md`、`workbook-conversion`
+- `status`: `generated`
+- `audience`: `human`、`agent`、`maintainer`
+- `created` / `updated`: 生成日
+- `sources`: 入力元 local file path と role
+- `conversion`: tool、version、output mode、formatting mode、table detection mode、shape details
+
+agent-facing contract として特に安定させる値は次の通りである。
+
+- `type`: `converted`
+- `category`: `converted`
+- `topics`: `converted`、`xlsx`、`markdown`、`miku-xlsx2md`、`workbook-conversion`
+- `status`: `generated`
+- `sources[0].type`: `local-file`
+- `sources[0].role`: `primary`
+- `conversion.tool`: `miku-xlsx2md`
+
+`created` / `updated` は生成日であり、再生成時に変わる。出力差分を比較するテストや fixture 生成では、実装側の固定日 option を使うか、front matter の日付行を正規化して比較する。
+
+トレーサビリティ確保のため、Markdown 本文側にも以下を必ず出力する。
 
 - Workbook 名
 - Sheet 名

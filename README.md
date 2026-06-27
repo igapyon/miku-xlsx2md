@@ -16,6 +16,8 @@ Links:
 
 The conversion goal is meaningful Markdown extraction, not exact visual reproduction of Excel.
 
+Generated combined Markdown includes workbook-level YAML front matter for provenance, document classification, and conversion settings.
+
 ## Features
 
 - Converts all sheets in a workbook in one pass
@@ -24,6 +26,7 @@ The conversion goal is meaningful Markdown extraction, not exact visual reproduc
 - Supports `display / raw / both` output modes
 - Supports `plain / github` formatting modes
 - Supports `balanced / border / planner-aware` table detection modes
+- Adds workbook-level YAML front matter to generated combined Markdown
 - Preserves supported rich text and hyperlinks where practical
 - Prefers cached formula values and parses formulas when needed
 - Writes Markdown or ZIP output from the Node.js CLI
@@ -58,6 +61,16 @@ Options:
 - `--keep-empty-columns`: Keep empty columns
 - `--summary`: Print per-sheet summary to stdout
 - `--help`: Show help and exit
+
+Output contract for agents:
+
+- Primary output is one workbook-level combined Markdown document.
+- Combined Markdown always starts with YAML front matter.
+- The body starts with `# Book: <workbook>` and then `## Sheet: <sheet>` sections in workbook sheet order.
+- ZIP output stores the combined Markdown at `output/<workbook>.md` and extracted assets under `output/assets/`.
+- `sources[0].path` in front matter is the input path passed to the CLI.
+- `created` and `updated` are generation dates. Use the core export API `generatedDate` option for deterministic fixture output.
+- Stable topic values are `converted`, `xlsx`, `markdown`, `miku-xlsx2md`, and `workbook-conversion`.
 
 Exit codes:
 
@@ -118,6 +131,7 @@ Internal identifiers, script names, tests, fixtures, and specification documents
 
 - High-level specification and design policy: [docs/xlsx2md-spec.md](./docs/xlsx2md-spec.md)
 - Detailed implementation-oriented specification: [docs/xlsx2md-impl-spec.md](./docs/xlsx2md-impl-spec.md)
+- Generated Markdown front matter contract: [docs/xlsx2md-front-matter.md](./docs/xlsx2md-front-matter.md)
 - Development backlog: [docs/TODO.md](./docs/TODO.md)
 
 ## License
@@ -146,6 +160,8 @@ See [LICENSE](./LICENSE) and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
 
 目的は Excel の見た目を完全再現することではなく、意味のある Markdown として情報を取り出すことです。
 
+生成される連結 Markdown には、入力元、文書分類、変換設定を示す Workbook 単位の YAML front matter が付きます。
+
 ## Node CLI
 
 ```bash
@@ -157,6 +173,16 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --zip /tmp/xlsx2md-b
 ```
 
 主なオプションは `--output-mode`、`--formatting-mode`、`--table-detection-mode`、`--encoding`、`--bom`、`--shape-details`、`--summary` です。詳細は `--help` を参照してください。
+
+生成 AI / agent 向けの出力契約:
+
+- 主出力は Workbook 単位の連結 Markdown です。
+- 連結 Markdown は常に YAML front matter から始まります。
+- 本文は `# Book: <workbook>` で始まり、Workbook 内のシート順に `## Sheet: <sheet>` セクションが続きます。
+- ZIP 出力では、連結 Markdown は `output/<workbook>.md`、抽出 asset は `output/assets/` 配下に入ります。
+- front matter の `sources[0].path` には CLI に渡された入力 path が入ります。
+- `created` / `updated` は生成日です。fixture などで決定的な出力が必要な場合は core export API の `generatedDate` option を使います。
+- 安定 topic 値は `converted`、`xlsx`、`markdown`、`miku-xlsx2md`、`workbook-conversion` です。
 
 ## ビルドとテスト
 
