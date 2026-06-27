@@ -234,7 +234,7 @@ describe("xlsx2md markdown export", () => {
     );
 
     expect(payload.mimeType).toBe("text/markdown;charset=utf-16be");
-    expect(Array.from(payload.data.slice(0, 4))).toEqual([0xfe, 0xff, 0x00, 0x23]);
+    expect(Array.from(payload.data.slice(0, 4))).toEqual([0xfe, 0xff, 0x00, 0x2d]);
   });
 
   it("writes the book heading only once in combined markdown", () => {
@@ -280,8 +280,55 @@ describe("xlsx2md markdown export", () => {
       }]
     );
 
-    expect(payload.content).toBe("# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body\n\n## Sheet: Other\n\nOther body");
+    expect(payload.content).toContain("\n# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body\n\n## Sheet: Other\n\nOther body");
     expect(payload.content.match(/^# Book: /gm)).toHaveLength(1);
+  });
+
+  it("prepends workbook-level front matter to combined markdown", () => {
+    const api = bootMarkdownExport();
+    const payload = api.createCombinedMarkdownExportFile(
+      { name: "sales.xlsx", sheets: [{ images: [], shapes: [] }] },
+      [{
+        fileName: "sales_001_Summary.md",
+        sheetName: "Summary",
+        markdown: "# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body",
+        summary: {
+          outputMode: "both",
+          formattingMode: "github",
+          tableDetectionMode: "border",
+          sections: 1,
+          tables: 0,
+          narrativeBlocks: 1,
+          merges: 0,
+          images: 0,
+          charts: 0,
+          cells: 1,
+          tableScores: [],
+          formulaDiagnostics: []
+        }
+      }],
+      {
+        sourcePath: "./fixtures/sales.xlsx",
+        toolVersion: "1.2.3",
+        shapeDetails: "include",
+        generatedDate: "2026-01-02"
+      }
+    );
+
+    expect(payload.content).toMatch(/^---\ntitle: "sales\.xlsx"/);
+    expect(payload.content).toContain("type: converted");
+    expect(payload.content).toContain("category: converted");
+    expect(payload.content).toContain("  - workbook-conversion");
+    expect(payload.content).toContain("status: generated");
+    expect(payload.content).toContain("created: \"2026-01-02\"");
+    expect(payload.content).toContain("updated: \"2026-01-02\"");
+    expect(payload.content).toContain("    path: \"./fixtures/sales.xlsx\"");
+    expect(payload.content).toContain("  version: \"1.2.3\"");
+    expect(payload.content).toContain("  output_mode: both");
+    expect(payload.content).toContain("  formatting_mode: github");
+    expect(payload.content).toContain("  table_detection_mode: border");
+    expect(payload.content).toContain("  shape_details: include");
+    expect(payload.content).toContain("---\n\n# Book: sales.xlsx");
   });
 
   it("drops blank lines left after removing duplicate book headings", () => {
@@ -309,7 +356,7 @@ describe("xlsx2md markdown export", () => {
       }]
     );
 
-    expect(payload.content).toBe("# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body");
+    expect(payload.content).toContain("\n# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body");
   });
 
   it("keeps combined export file names stable across modes", () => {
@@ -338,6 +385,6 @@ describe("xlsx2md markdown export", () => {
     );
 
     expect(payload.fileName).toBe("sample.md");
-    expect(payload.content).toBe("# Book: sample.xlsx\n\n## Sheet: Sheet1");
+    expect(payload.content).toContain("\n# Book: sample.xlsx\n\n## Sheet: Sheet1");
   });
 });

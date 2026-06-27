@@ -1067,7 +1067,36 @@ Workbook 名と Sheet 名は、ファイル名として不安定な文字や空�
 
 画面上のダウンロード機能では、Sheet ごとの Markdown を 1 つに連結した all-in-one Markdown を生成できる。
 
-現行実装では、各 Sheet の Markdown 断片の間にチャンク識別用コメントを挿入して連結する。
+現行実装では、Workbook 単位の YAML front matter を先頭に付け、その後に Workbook 見出しと各 Sheet の Markdown 本文を連結する。
+
+front matter の詳細な出力契約は [xlsx2md-front-matter.md](./xlsx2md-front-matter.md) を参照する。
+
+front matter には、少なくとも次を含める。
+
+- `title`
+- `description`
+- `type: converted`
+- `category: converted`
+- `topics`
+- `status: generated`
+- `audience`
+- `created` / `updated`
+- `sources`
+- `conversion`
+
+CLI 経由の `sources[0].path` には、再生成時の手がかりになるよう CLI へ渡された入力 path をそのまま用いる。
+
+テストや fixture 生成で日付差分を避けたい場合は、export API の `generatedDate` option で `created` / `updated` の日付を固定できる。通常の CLI 利用では公開オプションとしては扱わず、生成日の local date を用いる。
+
+`--help` は人間だけでなく生成 AI / agent が CLI を安全に呼び出すための短い契約説明としても扱う。現行 help では、次を明示する。
+
+- 入力は 1 つの local `.xlsx` workbook
+- 主出力は Workbook 単位の combined Markdown
+- combined Markdown は YAML front matter、`# Book: ...`、`## Sheet: ...` の順で始まる
+- ZIP 内 Markdown と assets の配置
+- `sources[0].path` の由来
+- fixture 用の固定日は CLI flag ではなく export API の `generatedDate` で扱うこと
+- stable topic values
 
 ファイル名は、少なくとも次の形式を用いる。
 
@@ -1682,7 +1711,7 @@ function detectTableCandidates(sheet: ParsedSheet): TableCandidate[] {
 - 入力: `workbook`, `sheet`, `options` または `markdownFiles`
 - 出力: `MarkdownFile`、連結 Markdown、ZIP entry 一覧
 - 前後関係: 解析本体の最終段であり、UI のプレビューと保存の両方がこの結果を使う
-- 現行実装の注意: ここで返す Markdown 本文は JavaScript 文字列であり、エンコーディングや BOM はまだ扱わない
+- 現行実装の注意: `createCombinedMarkdownExportFile(...)` が返す Markdown content は JavaScript 文字列であり、エンコーディングや BOM は `createCombinedMarkdownExportPayload(...)` または ZIP entry 作成時に扱う
 
 ```ts
 function convertSheetToMarkdown(workbook: ParsedWorkbook, sheet: ParsedSheet, options: MarkdownOptions = {}): MarkdownFile {
@@ -1730,21 +1759,29 @@ function convertSheetToMarkdown(workbook: ParsedWorkbook, sheet: ParsedSheet, op
   };
 }
 
-function createCombinedMarkdownExportFile(workbook: ParsedWorkbook, markdownFiles: MarkdownFile[]): { fileName: string; content: string } {
+function createCombinedMarkdownExportFile(
+  workbook: ParsedWorkbook,
+  markdownFiles: MarkdownFile[],
+  options: MarkdownExportOptions = {}
+): { fileName: string; content: string } {
   const fileName = `${String(workbook.name || "workbook").replace(/\.xlsx$/i, "")}.md`;
-  const content = markdownFiles
-    .map((markdownFile) => `<!-- ${markdownFile.fileName.replace(/\.md$/i, "")} -->\n${markdownFile.markdown}`)
-    .join("\n\n");
+  const bookHeading = `# Book: ${String(workbook.name || "workbook.xlsx")}`;
+  const frontMatter = createFrontMatter(workbook, markdownFiles, options);
+  const content = [
+    frontMatter,
+    bookHeading,
+    ...markdownFiles.map((markdownFile) => stripBookHeading(markdownFile.markdown, bookHeading))
+  ].join("\n\n");
   return { fileName, content };
 }
 
-function createExportEntries(workbook: ParsedWorkbook, markdownFiles: MarkdownFile[]): ExportEntry[] {
+function createExportEntries(workbook: ParsedWorkbook, markdownFiles: MarkdownFile[], options: MarkdownExportOptions = {}): ExportEntry[] {
   const entries: ExportEntry[] = [];
   if (markdownFiles.length > 0) {
-    const combined = createCombinedMarkdownExportFile(workbook, markdownFiles);
+    const combined = createCombinedMarkdownExportPayload(workbook, markdownFiles, options);
     entries.push({
       name: `output/${combined.fileName}`,
-      data: textEncoder.encode(`${combined.content}\n`)
+      data: combined.data
     });
   }
   for (const sheet of workbook.sheets) {
@@ -1766,7 +1803,7 @@ function createExportEntries(workbook: ParsedWorkbook, markdownFiles: MarkdownFi
 }
 ```
 
-`createCombinedMarkdownExportFile(...)` は現行実装では `{ fileName, content }` を返すだけで、`content` は未エンコードの文字列である。保存時の文字コード選択はここでは行っていない。
+`createCombinedMarkdownExportFile(...)` は現行実装では `{ fileName, content }` を返すだけで、`content` は YAML front matter 付きの未エンコード文字列である。保存時の文字コード選択はここでは行っていない。
 
 `createExportEntries(...)` は現行実装では専用の text-encoding 層を経由して Markdown をバイト列化する。`utf-8`、`utf-16le`、`utf-16be`、`utf-32le`、`utf-32be` は Node runtime と downstream Web App で扱える。`shift_jis` は Node 側では `iconv-lite` を使ってエンコードできるが、ブラウザ単体 runtime では利用できない前提である。
 
