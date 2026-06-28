@@ -308,27 +308,60 @@ describe("xlsx2md markdown export", () => {
         }
       }],
       {
-        sourcePath: "./fixtures/sales.xlsx",
         toolVersion: "1.2.3",
-        shapeDetails: "include",
-        generatedDate: "2026-01-02"
+        shapeDetails: "include"
       }
     );
 
-    expect(payload.content).toMatch(/^---\ntitle: "sales\.xlsx"/);
-    expect(payload.content).toContain("type: converted");
-    expect(payload.content).toContain("category: converted");
-    expect(payload.content).toContain("  - workbook-conversion");
-    expect(payload.content).toContain("status: generated");
-    expect(payload.content).toContain("created: \"2026-01-02\"");
-    expect(payload.content).toContain("updated: \"2026-01-02\"");
-    expect(payload.content).toContain("    path: \"./fixtures/sales.xlsx\"");
-    expect(payload.content).toContain("  version: \"1.2.3\"");
-    expect(payload.content).toContain("  output_mode: both");
-    expect(payload.content).toContain("  formatting_mode: github");
-    expect(payload.content).toContain("  table_detection_mode: border");
-    expect(payload.content).toContain("  shape_details: include");
-    expect(payload.content).toContain("---\n\n# Book: sales.xlsx");
+    expect(payload.content.startsWith([
+      "---",
+      "title: \"sales.xlsx\"",
+      "type: converted",
+      "conversion:",
+      "  tool: miku-xlsx2md",
+      "  version: \"1.2.3\"",
+      "  output_mode: both",
+      "  formatting_mode: github",
+      "  table_detection_mode: border",
+      "  shape_details: include",
+      "---",
+      "",
+      "# Book: sales.xlsx"
+    ].join("\n"))).toBe(true);
+    expect(payload.content).not.toContain("category: converted");
+    expect(payload.content).not.toContain("sources:");
+    expect(payload.content).not.toContain("created:");
+    expect(payload.content).not.toContain("updated:");
+  });
+
+  it("omits workbook-level front matter when requested", () => {
+    const api = bootMarkdownExport();
+    const payload = api.createCombinedMarkdownExportFile(
+      { name: "sales.xlsx", sheets: [{ images: [], shapes: [] }] },
+      [{
+        fileName: "sales_001_Summary.md",
+        sheetName: "Summary",
+        markdown: "# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body",
+        summary: {
+          outputMode: "display",
+          formattingMode: "github",
+          tableDetectionMode: "balanced",
+          sections: 1,
+          tables: 0,
+          narrativeBlocks: 1,
+          merges: 0,
+          images: 0,
+          charts: 0,
+          cells: 1,
+          tableScores: [],
+          formulaDiagnostics: []
+        }
+      }],
+      { frontMatter: "exclude" }
+    );
+
+    expect(payload.content.startsWith("---\n")).toBe(false);
+    expect(payload.content).toBe("# Book: sales.xlsx\n\n## Sheet: Summary\n\nSummary body");
   });
 
   it("drops blank lines left after removing duplicate book headings", () => {

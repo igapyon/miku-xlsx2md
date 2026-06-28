@@ -16,7 +16,7 @@ Links:
 
 The conversion goal is meaningful Markdown extraction, not exact visual reproduction of Excel.
 
-Generated combined Markdown includes workbook-level YAML front matter for provenance, document classification, and conversion settings.
+Generated combined Markdown includes workbook-level YAML front matter with the artifact title, type, and conversion settings.
 
 ## Features
 
@@ -54,6 +54,7 @@ Options:
 - `--encoding <value>`: `utf-8`, `shift_jis`, `utf-16le`, `utf-16be`, `utf-32le`, or `utf-32be`
 - `--bom <value>`: `off` or `on`
 - `--shape-details <mode>`: `include` or `exclude`
+- `--front-matter <mode>`: `include` or `exclude`
 - `--include-shape-details`: Alias for `--shape-details include`
 - `--no-header-row`: Do not treat the first row as a table header
 - `--no-trim-text`: Preserve surrounding whitespace
@@ -65,12 +66,11 @@ Options:
 Output contract for agents:
 
 - Primary output is one workbook-level combined Markdown document.
-- Combined Markdown always starts with YAML front matter.
-- The body starts with `# Book: <workbook>` and then `## Sheet: <sheet>` sections in workbook sheet order.
+- Combined Markdown starts with YAML front matter by default. Use `--front-matter exclude` to omit it.
+- The Markdown body starts with `# Book: <workbook>` and then `## Sheet: <sheet>` sections in workbook sheet order.
 - ZIP output stores the combined Markdown at `output/<workbook>.md` and extracted assets under `output/assets/`.
-- `sources[0].path` in front matter is the input path passed to the CLI.
-- `created` and `updated` are generation dates. Use the core export API `generatedDate` option for deterministic fixture output.
-- Stable topic values are `converted`, `xlsx`, `markdown`, `miku-xlsx2md`, and `workbook-conversion`.
+- Front matter fields are `title`, `type`, and `conversion`.
+- `conversion` records the tool version, output mode, formatting mode, table detection mode, and shape detail mode.
 
 Exit codes:
 
@@ -172,7 +172,7 @@ See [LICENSE](./LICENSE) and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
 
 目的は Excel の見た目を完全再現することではなく、意味のある Markdown として情報を取り出すことです。
 
-生成される連結 Markdown には、入力元、文書分類、変換設定を示す Workbook 単位の YAML front matter が付きます。
+生成される連結 Markdown には、成果物 title、type、変換設定を示す Workbook 単位の YAML front matter が付きます。
 
 ## Node CLI
 
@@ -184,17 +184,16 @@ npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --out /tmp/xlsx2md-b
 npm run cli -- ./tests/fixtures/xlsx2md-basic-sample01.xlsx --zip /tmp/xlsx2md-basic.zip
 ```
 
-主なオプションは `--output-mode`、`--formatting-mode`、`--table-detection-mode`、`--encoding`、`--bom`、`--shape-details`、`--summary` です。詳細は `--help` を参照してください。
+主なオプションは `--output-mode`、`--formatting-mode`、`--table-detection-mode`、`--encoding`、`--bom`、`--shape-details`、`--front-matter`、`--summary` です。詳細は `--help` を参照してください。
 
 生成 AI / agent 向けの出力契約:
 
 - 主出力は Workbook 単位の連結 Markdown です。
-- 連結 Markdown は常に YAML front matter から始まります。
-- 本文は `# Book: <workbook>` で始まり、Workbook 内のシート順に `## Sheet: <sheet>` セクションが続きます。
+- 連結 Markdown は既定で YAML front matter から始まります。`--front-matter exclude` で省略できます。
+- Markdown 本文は `# Book: <workbook>` で始まり、Workbook 内のシート順に `## Sheet: <sheet>` セクションが続きます。
 - ZIP 出力では、連結 Markdown は `output/<workbook>.md`、抽出 asset は `output/assets/` 配下に入ります。
-- front matter の `sources[0].path` には CLI に渡された入力 path が入ります。
-- `created` / `updated` は生成日です。fixture などで決定的な出力が必要な場合は core export API の `generatedDate` option を使います。
-- 安定 topic 値は `converted`、`xlsx`、`markdown`、`miku-xlsx2md`、`workbook-conversion` です。
+- front matter のフィールドは `title`、`type`、`conversion` です。
+- `conversion` には tool version、output mode、formatting mode、table detection mode、shape detail mode が入ります。
 
 ## ビルドとテスト
 

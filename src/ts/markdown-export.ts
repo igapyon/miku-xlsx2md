@@ -49,10 +49,9 @@
     bom?: MarkdownBomMode | string | null;
   };
   type MarkdownExportOptions = MarkdownEncodingOptions & {
-    sourcePath?: string | null;
     toolVersion?: string | null;
     shapeDetails?: "include" | "exclude" | string | null;
-    generatedDate?: string | Date | null;
+    frontMatter?: "include" | "exclude" | string | null;
   };
 
   type WorkbookLike = {
@@ -132,25 +131,8 @@
     return `output/${relativePath}`;
   }
 
-  function createLocalDateString(date = new Date()): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
   function quoteYamlString(value: string): string {
     return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
-  }
-
-  function normalizeGeneratedDate(value: string | Date | null | undefined): string {
-    if (value instanceof Date) {
-      return createLocalDateString(value);
-    }
-    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return value;
-    }
-    return createLocalDateString();
   }
 
   function createOutputFileName(
@@ -213,33 +195,12 @@
 
   function createFrontMatter(workbook: WorkbookLike, markdownFiles: MarkdownFile[], options: MarkdownExportOptions = {}): string {
     const firstSummary = markdownFiles[0]?.summary;
-    const date = normalizeGeneratedDate(options.generatedDate);
     const workbookName = String(workbook.name || "workbook.xlsx");
-    const sourcePath = String(options.sourcePath || workbookName);
     const shapeDetails = String(options.shapeDetails || "exclude");
     return [
       "---",
       `title: ${quoteYamlString(workbookName)}`,
-      "description: \"Excel workbook converted to Markdown by miku-xlsx2md.\"",
       "type: converted",
-      "category: converted",
-      "topics:",
-      "  - converted",
-      "  - xlsx",
-      "  - markdown",
-      "  - miku-xlsx2md",
-      "  - workbook-conversion",
-      "status: generated",
-      "audience:",
-      "  - human",
-      "  - agent",
-      "  - maintainer",
-      `created: ${quoteYamlString(date)}`,
-      `updated: ${quoteYamlString(date)}`,
-      "sources:",
-      "  - type: local-file",
-      `    path: ${quoteYamlString(sourcePath)}`,
-      "    role: primary",
       "conversion:",
       "  tool: miku-xlsx2md",
       `  version: ${quoteYamlString(String(options.toolVersion || "unknown"))}`,
@@ -251,6 +212,10 @@
     ].join("\n");
   }
 
+  function shouldIncludeFrontMatter(options: MarkdownExportOptions = {}): boolean {
+    return String(options.frontMatter || "include") !== "exclude";
+  }
+
   function createCombinedMarkdownExportFile(
     workbook: WorkbookLike,
     markdownFiles: MarkdownFile[],
@@ -258,9 +223,8 @@
   ): { fileName: string; content: string } {
     const fileName = createCombinedMarkdownFileName(workbook.name);
     const bookHeading = `# Book: ${String(workbook.name || "workbook.xlsx")}`;
-    const frontMatter = createFrontMatter(workbook, markdownFiles, options);
     const content = [
-      frontMatter,
+      ...(shouldIncludeFrontMatter(options) ? [createFrontMatter(workbook, markdownFiles, options)] : []),
       bookHeading,
       ...markdownFiles
         .map((markdownFile) => stripBookHeading(markdownFile.markdown, bookHeading))
