@@ -244,6 +244,13 @@
       endCol: number
     ) => void;
   };
+  type Xlsx2mdMarkdownExportOptions = {
+    encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
+    bom?: "off" | "on" | string | null;
+    toolVersion?: string | null;
+    shapeDetails?: "include" | "exclude" | string | null;
+    frontMatter?: "include" | "exclude" | string | null;
+  };
   type Xlsx2mdMarkdownExportModule<TParsedWorkbook, TMarkdownFile, TExportEntry> = {
     encodeMarkdownText: (text: string, options?: {
       encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
@@ -252,10 +259,7 @@
     createCombinedMarkdownExportPayload: (
       workbook: TParsedWorkbook,
       markdownFiles: TMarkdownFile[],
-      options?: {
-        encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
-        bom?: "off" | "on" | string | null;
-      }
+      options?: Xlsx2mdMarkdownExportOptions
     ) => { fileName: string; content: string; data: Uint8Array; mimeType: string };
     renderMarkdownTable: (rows: string[][], treatFirstRowAsHeader: boolean) => string;
     stripWorkbookExtension: (workbookName: string) => string;
@@ -269,31 +273,26 @@
       formattingMode?: "plain" | "github"
     ) => string;
     createSummaryText: (markdownFile: TMarkdownFile) => string;
-    createCombinedMarkdownExportFile: (workbook: TParsedWorkbook, markdownFiles: TMarkdownFile[]) => { fileName: string; content: string };
+    createCombinedMarkdownExportFile: (
+      workbook: TParsedWorkbook,
+      markdownFiles: TMarkdownFile[],
+      options?: Xlsx2mdMarkdownExportOptions
+    ) => { fileName: string; content: string };
     createMarkdownExportEntry: (
       workbook: TParsedWorkbook,
       markdownFiles: TMarkdownFile[],
-      options?: {
-        encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
-        bom?: "off" | "on" | string | null;
-      }
+      options?: Xlsx2mdMarkdownExportOptions
     ) => TExportEntry | null;
     createAssetExportEntries: (workbook: TParsedWorkbook) => TExportEntry[];
     createExportEntries: (
       workbook: TParsedWorkbook,
       markdownFiles: TMarkdownFile[],
-      options?: {
-        encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
-        bom?: "off" | "on" | string | null;
-      }
+      options?: Xlsx2mdMarkdownExportOptions
     ) => TExportEntry[];
     createWorkbookExportArchive: (
       workbook: TParsedWorkbook,
       markdownFiles: TMarkdownFile[],
-      options?: {
-        encoding?: "utf-8" | "shift_jis" | "utf-16le" | "utf-16be" | "utf-32le" | "utf-32be" | string | null;
-        bom?: "off" | "on" | string | null;
-      }
+      options?: Xlsx2mdMarkdownExportOptions
     ) => Uint8Array;
     normalizeMarkdownLineBreaks: (text: string) => string;
     textEncoder: TextEncoder;

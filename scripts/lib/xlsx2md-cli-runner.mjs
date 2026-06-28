@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const SHAPE_DETAILS_MODES = ["include", "exclude"];
+const FRONT_MATTER_MODES = ["include", "exclude"];
 const ENCODINGS = ["utf-8", "shift_jis", "utf-16le", "utf-16be", "utf-32le", "utf-32be"];
 const BOM_MODES = ["off", "on"];
 const FLAG_OPTIONS = {
@@ -49,6 +50,7 @@ Options:
   --formatting-mode <mode>      plain | github (default: github)
   --table-detection-mode <mode> balanced | border | planner-aware (default: balanced)
   --shape-details <mode>        include | exclude (default: exclude)
+  --front-matter <mode>         include | exclude (default: include)
   --include-shape-details       Alias for --shape-details include
   --no-header-row               Do not treat the first row as a table header
   --no-trim-text                Preserve surrounding whitespace
@@ -59,25 +61,22 @@ Options:
   --help                        Show this help and exit
 
 GUI-aligned defaults:
-  output-mode=display, formatting-mode=github, table-detection-mode=balanced, shape-details=exclude
+  output-mode=display, formatting-mode=github, table-detection-mode=balanced, shape-details=exclude, front-matter=include
 
 Output contract for agents:
   - The primary Markdown output is one workbook-level combined Markdown document.
   - ZIP output contains output/<workbook>.md plus extracted assets under output/assets/.
-  - Combined Markdown always starts with YAML front matter, then "# Book: <workbook>",
-    followed by "## Sheet: <sheet>" sections in workbook sheet order.
-  - sources[0].path in front matter is the input path passed to this CLI.
-  - created and updated are generation dates. Use the core export API generatedDate
-    option, not a CLI flag, when deterministic fixture output is required.
+  - Combined Markdown starts with YAML front matter unless --front-matter exclude is specified.
+  - The Markdown body starts with "# Book: <workbook>", followed by "## Sheet: <sheet>"
+    sections in workbook sheet order.
   - Use --summary for machine-readable-ish progress logs; use the Markdown front
     matter and body as the durable conversion artifact.
 
 Front matter fields:
-  title, description, type, category, topics, status, audience, created, updated,
-  sources, conversion
+  title, type, conversion
 
-Stable topic values:
-  converted, xlsx, markdown, miku-xlsx2md, workbook-conversion
+Conversion fields:
+  tool, version, output_mode, formatting_mode, table_detection_mode, shape_details
 
 Exit codes:
   0                             Success
@@ -134,6 +133,12 @@ function createValueOptions(markdownOptions) {
         options.includeShapeDetails = value === "include";
       }
     },
+    "--front-matter": {
+      validate: (value) => normalizeEnumOption(value, FRONT_MATTER_MODES, "front matter mode"),
+      apply(options, value) {
+        options.includeFrontMatter = value === "include";
+      }
+    },
     "--encoding": {
       validate: (value) => normalizeEnumOption(value, ENCODINGS, "encoding"),
       apply(options, value) {
@@ -157,6 +162,7 @@ export function parseArgs(argv, markdownOptions) {
     removeEmptyRows: true,
     removeEmptyColumns: true,
     includeShapeDetails: false,
+    includeFrontMatter: true,
     outputMode: "display",
     formattingMode: "github",
     tableDetectionMode: "balanced",
@@ -287,9 +293,9 @@ export async function runXlsx2mdCli({ argv, loadApi, readPackageVersion }) {
     const combined = api.createCombinedMarkdownExportPayload(workbook, files, {
       encoding: options.encoding,
       bom: options.bom,
-      sourcePath: options.inputPath,
       toolVersion: packageVersion,
-      shapeDetails: options.includeShapeDetails ? "include" : "exclude"
+      shapeDetails: options.includeShapeDetails ? "include" : "exclude",
+      frontMatter: options.includeFrontMatter ? "include" : "exclude"
     });
 
     if (options.zipPath) {
@@ -297,9 +303,9 @@ export async function runXlsx2mdCli({ argv, loadApi, readPackageVersion }) {
         const zipBytes = api.createWorkbookExportArchive(workbook, files, {
           encoding: options.encoding,
           bom: options.bom,
-          sourcePath: options.inputPath,
           toolVersion: packageVersion,
-          shapeDetails: options.includeShapeDetails ? "include" : "exclude"
+          shapeDetails: options.includeShapeDetails ? "include" : "exclude",
+          frontMatter: options.includeFrontMatter ? "include" : "exclude"
         });
         await writeBinaryFile(path.resolve(options.zipPath), zipBytes);
       } catch (error) {

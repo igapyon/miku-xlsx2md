@@ -1067,36 +1067,27 @@ Workbook 名と Sheet 名は、ファイル名として不安定な文字や空�
 
 画面上のダウンロード機能では、Sheet ごとの Markdown を 1 つに連結した all-in-one Markdown を生成できる。
 
-現行実装では、Workbook 単位の YAML front matter を先頭に付け、その後に Workbook 見出しと各 Sheet の Markdown 本文を連結する。
+現行実装では、既定で Workbook 単位の YAML front matter を先頭に付け、その後に Workbook 見出しと各 Sheet の Markdown 本文を連結する。`frontMatter: "exclude"` または `--front-matter exclude` が指定された場合は front matter を付けない。
 
 front matter の詳細な出力契約は [xlsx2md-front-matter.md](./xlsx2md-front-matter.md) を参照する。
 
 front matter には、少なくとも次を含める。
 
 - `title`
-- `description`
 - `type: converted`
-- `category: converted`
-- `topics`
-- `status: generated`
-- `audience`
-- `created` / `updated`
-- `sources`
 - `conversion`
 
-CLI 経由の `sources[0].path` には、再生成時の手がかりになるよう CLI へ渡された入力 path をそのまま用いる。
-
-テストや fixture 生成で日付差分を避けたい場合は、export API の `generatedDate` option で `created` / `updated` の日付を固定できる。通常の CLI 利用では公開オプションとしては扱わず、生成日の local date を用いる。
+`conversion` には、tool、version、output mode、formatting mode、table detection mode、shape details を出力する。
 
 `--help` は人間だけでなく生成 AI / agent が CLI を安全に呼び出すための短い契約説明としても扱う。現行 help では、次を明示する。
 
 - 入力は 1 つの local `.xlsx` workbook
 - 主出力は Workbook 単位の combined Markdown
-- combined Markdown は YAML front matter、`# Book: ...`、`## Sheet: ...` の順で始まる
+- combined Markdown は既定で YAML front matter、`# Book: ...`、`## Sheet: ...` の順で始まる
+- front matter を省略した場合は `# Book: ...` から始まる
 - ZIP 内 Markdown と assets の配置
-- `sources[0].path` の由来
-- fixture 用の固定日は CLI flag ではなく export API の `generatedDate` で扱うこと
-- stable topic values
+- front matter fields
+- conversion fields
 
 ファイル名は、少なくとも次の形式を用いる。
 
@@ -1766,9 +1757,8 @@ function createCombinedMarkdownExportFile(
 ): { fileName: string; content: string } {
   const fileName = `${String(workbook.name || "workbook").replace(/\.xlsx$/i, "")}.md`;
   const bookHeading = `# Book: ${String(workbook.name || "workbook.xlsx")}`;
-  const frontMatter = createFrontMatter(workbook, markdownFiles, options);
   const content = [
-    frontMatter,
+    ...(String(options.frontMatter || "include") !== "exclude" ? [createFrontMatter(workbook, markdownFiles, options)] : []),
     bookHeading,
     ...markdownFiles.map((markdownFile) => stripBookHeading(markdownFile.markdown, bookHeading))
   ].join("\n\n");
@@ -1803,7 +1793,7 @@ function createExportEntries(workbook: ParsedWorkbook, markdownFiles: MarkdownFi
 }
 ```
 
-`createCombinedMarkdownExportFile(...)` は現行実装では `{ fileName, content }` を返すだけで、`content` は YAML front matter 付きの未エンコード文字列である。保存時の文字コード選択はここでは行っていない。
+`createCombinedMarkdownExportFile(...)` は現行実装では `{ fileName, content }` を返すだけで、`content` は既定で YAML front matter 付きの未エンコード文字列である。`frontMatter: "exclude"` 指定時は front matter なしの文字列を返す。保存時の文字コード選択はここでは行っていない。
 
 `createExportEntries(...)` は現行実装では専用の text-encoding 層を経由して Markdown をバイト列化する。`utf-8`、`utf-16le`、`utf-16be`、`utf-32le`、`utf-32be` は Node runtime と downstream Web App で扱える。`shift_jis` は Node 側では `iconv-lite` を使ってエンコードできるが、ブラウザ単体 runtime では利用できない前提である。
 

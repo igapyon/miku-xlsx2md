@@ -109,14 +109,17 @@ describe("xlsx2md cli", () => {
     expect(result.stdout).toContain("--bom");
     expect(result.stdout).toContain("--formatting-mode");
     expect(result.stdout).toContain("--table-detection-mode");
+    expect(result.stdout).toContain("--front-matter");
     expect(result.stdout).toContain("GUI-aligned defaults:");
     expect(result.stdout).toContain("formatting-mode=github");
     expect(result.stdout).toContain("shape-details=exclude");
+    expect(result.stdout).toContain("front-matter=include");
     expect(result.stdout).toContain("Output contract for agents:");
     expect(result.stdout).toContain("YAML front matter");
-    expect(result.stdout).toContain("sources[0].path");
-    expect(result.stdout).toContain("Stable topic values:");
-    expect(result.stdout).toContain("workbook-conversion");
+    expect(result.stdout).toContain("Front matter fields:");
+    expect(result.stdout).toContain("title, type, conversion");
+    expect(result.stdout).toContain("Conversion fields:");
+    expect(result.stdout).toContain("shape_details");
     expect(result.stdout).toContain("Exit codes:");
   });
 
@@ -188,6 +191,31 @@ describe("xlsx2md cli", () => {
 
       const outputText = readFileSync(outputPath, "utf8");
       expect(outputText).toContain("# ");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("omits front matter when requested", async () => {
+    const workspace = mkdtempSync(path.join(tmpdir(), "xlsx2md-cli-"));
+    const fixturePath = path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx");
+    const outputPath = path.join(workspace, "front-matter-exclude.md");
+
+    try {
+      await execFileAsync(process.execPath, [
+        path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
+        fixturePath,
+        "--out",
+        outputPath,
+        "--front-matter",
+        "exclude"
+      ], {
+        cwd: path.resolve(__dirname, "..")
+      });
+
+      const outputText = readFileSync(outputPath, "utf8");
+      expect(outputText.startsWith("---\n")).toBe(false);
+      expect(outputText.startsWith("# Book: xlsx2md-basic-sample01.xlsx")).toBe(true);
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }
@@ -328,6 +356,19 @@ describe("xlsx2md cli", () => {
       cwd: path.resolve(__dirname, "..")
     })).rejects.toMatchObject({
       stderr: expect.stringContaining("Invalid shape details mode: invalid")
+    });
+  });
+
+  it("fails for an invalid front matter mode", async () => {
+    await expect(execFileAsync(process.execPath, [
+      path.resolve(__dirname, "../scripts/miku-xlsx2md-cli.mjs"),
+      path.resolve(__dirname, "./fixtures/xlsx2md-basic-sample01.xlsx"),
+      "--front-matter",
+      "invalid"
+    ], {
+      cwd: path.resolve(__dirname, "..")
+    })).rejects.toMatchObject({
+      stderr: expect.stringContaining("Invalid front matter mode: invalid")
     });
   });
 
