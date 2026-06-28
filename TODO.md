@@ -19,28 +19,34 @@ Feature and implementation backlog remains in [docs/TODO.md](./docs/TODO.md).
 
 Local commands:
 
-- `npm run build:runtime`
+- `npm run build:bundle`
+- `npm run smoke:bundle`
 - `npm run smoke:runtime`
 - `npm run stage:runtime-release`
 
 Local generated files:
 
+- `bundle/miku-xlsx2md.mjs`
 - `bundle/miku-xlsx2md-runtime.mjs`
 - `bundle/miku-xlsx2md-runtime.json`
+- `bundle/miku-xlsx2md-sources.tgz`
 
 GitHub Release assets:
 
+- `miku-xlsx2md-<version>.mjs`
 - `miku-xlsx2md-runtime-<version>.mjs`
-- `miku-xlsx2md-runtime-<version>.json`
+- `miku-xlsx2md-sources-<version>.tgz`
+
+`bundle/miku-xlsx2md-runtime.json` is local build metadata and is not uploaded as a GitHub Release asset.
 
 Workflow:
 
 - `.github/workflows/ci.yml`
   - Trigger: pushes to `main` / `devel`, pull requests
   - Responsibility: install dependencies with `npm ci` and run `npm test`
-- `.github/workflows/release-runtime-bundle.yml`
-  - Trigger: `v*` tag push
-  - Responsibility: build/test main app, build runtime bundle, smoke runtime bundle, stage release assets, upload release assets to the matching GitHub Release
+- `.github/workflows/release-cli-runtime-bundles.yml`
+  - Trigger: `v*` GitHub Release published
+  - Responsibility: checkout release tag, build/test main app, build CLI/runtime/source bundles, smoke bundles, stage release assets, upload release assets to the matching GitHub Release
 
 ## Ownership
 

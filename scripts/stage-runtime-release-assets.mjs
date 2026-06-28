@@ -2,10 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
-  RUNTIME_BUNDLE_BASENAME,
+  PRODUCT_BUNDLE_BASENAME,
+  SOURCE_BUNDLE_TGZ,
   RUNTIME_BUNDLE_JSON,
+  RUNTIME_BUNDLE_BASENAME,
   RUNTIME_BUNDLE_MJS,
-  createRuntimeBundleMetadata,
   getPackageVersion,
   readPackageJson,
   resolveRuntimeBundlePaths
@@ -41,23 +42,19 @@ async function main() {
   const packageJson = await readPackageJson(ROOT);
   const packageVersion = getPackageVersion(packageJson);
   const releaseVersion = resolveReleaseVersion(packageVersion);
-  const { runtimePath } = resolveRuntimeBundlePaths(ROOT);
+  const { cliPath, runtimePath, sourceArchivePath } = resolveRuntimeBundlePaths(ROOT);
+  const releaseCliName = `${PRODUCT_BUNDLE_BASENAME}-${releaseVersion}.mjs`;
   const releaseRuntimeName = `${RUNTIME_BUNDLE_BASENAME}-${releaseVersion}.mjs`;
-  const releaseMetadataName = `${RUNTIME_BUNDLE_BASENAME}-${releaseVersion}.json`;
+  const releaseSourcesName = `${PRODUCT_BUNDLE_BASENAME}-sources-${releaseVersion}.tgz`;
 
+  await fs.rm(RELEASE_ASSETS_DIR, { recursive: true, force: true });
   await fs.mkdir(RELEASE_ASSETS_DIR, { recursive: true });
+  await copyAsset(cliPath, releaseCliName);
   await copyAsset(runtimePath, releaseRuntimeName);
+  await copyAsset(sourceArchivePath, releaseSourcesName);
 
-  const releaseMetadataPath = path.resolve(RELEASE_ASSETS_DIR, releaseMetadataName);
-  const releaseMetadata = {
-    ...createRuntimeBundleMetadata(packageVersion),
-    releaseVersion,
-    runtimeAsset: releaseRuntimeName
-  };
-  await fs.writeFile(releaseMetadataPath, JSON.stringify(releaseMetadata, null, 2) + "\n", "utf8");
-  console.log(`[stage:runtime-release] staged ${path.relative(ROOT, releaseMetadataPath)}`);
-
-  console.log(`[stage:runtime-release] source files: ${RUNTIME_BUNDLE_MJS}, ${RUNTIME_BUNDLE_JSON}`);
+  console.log(`[stage:runtime-release] source files: ${PRODUCT_BUNDLE_BASENAME}.mjs, ${RUNTIME_BUNDLE_MJS}, ${SOURCE_BUNDLE_TGZ}, ${RUNTIME_BUNDLE_JSON}`);
+  console.log("[stage:runtime-release] metadata json is a local build artifact and is not staged for GitHub Release");
 }
 
 main().catch((error) => {
