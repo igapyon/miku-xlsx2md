@@ -1,7 +1,13 @@
 .DS_Store
 local-data/
-workplace/
+workplace/*
+!workplace/.gitkeep
 node_modules/
+.npm-cache/
 dist/
 bundle/
 release-assets/
+coverage/
+*.log
+npm-debug.log*
+.vscode/mcp.json

@@ -35,9 +35,12 @@ GitHub Release assets:
 
 Workflow:
 
+- `.github/workflows/ci.yml`
+  - Trigger: pushes to `main` / `devel`, pull requests
+  - Responsibility: install dependencies with `npm ci` and run `npm test`
 - `.github/workflows/release-runtime-bundle.yml`
-- Trigger: `v*` tag push
-- Responsibility: build/test main app, build runtime bundle, smoke runtime bundle, stage release assets, upload release assets to the matching GitHub Release
+  - Trigger: `v*` tag push
+  - Responsibility: build/test main app, build runtime bundle, smoke runtime bundle, stage release assets, upload release assets to the matching GitHub Release
 
 ## Ownership
 
