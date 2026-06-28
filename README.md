@@ -88,6 +88,11 @@ npm run build
 
 Generated browser HTML files are no longer owned by this repository. Build and release the browser app from `miku-xlsx2md-web`.
 
+GitHub Actions:
+
+- `.github/workflows/ci.yml` runs `npm ci` and `npm test` on pushes to `main` / `devel` and on pull requests.
+- `.github/workflows/release-runtime-bundle.yml` runs on `v*` tags and publishes runtime bundle release assets.
+
 ## Runtime Bundle
 
 This repository publishes the upstream runtime bundle consumed by downstream surfaces such as `miku-xlsx2md-web`.
@@ -132,6 +137,7 @@ Internal identifiers, script names, tests, fixtures, and specification documents
 - High-level specification and design policy: [docs/xlsx2md-spec.md](./docs/xlsx2md-spec.md)
 - Detailed implementation-oriented specification: [docs/xlsx2md-impl-spec.md](./docs/xlsx2md-impl-spec.md)
 - Generated Markdown front matter contract: [docs/xlsx2md-front-matter.md](./docs/xlsx2md-front-matter.md)
+- miku-soft maintenance reference: [docs/miku-soft-reference.md](./docs/miku-soft-reference.md)
 - Development backlog: [docs/TODO.md](./docs/TODO.md)
 
 ## License
