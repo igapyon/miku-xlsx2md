@@ -3,10 +3,13 @@ import path from "node:path";
 
 import { XLSX2MD_CORE_JS_ORDER } from "./xlsx2md-module-order.mjs";
 
+export const PRODUCT_BUNDLE_BASENAME = "miku-xlsx2md";
 export const RUNTIME_BUNDLE_BASENAME = "miku-xlsx2md-runtime";
 export const RUNTIME_BUNDLE_DIR = "bundle";
+export const CLI_BUNDLE_MJS = `${PRODUCT_BUNDLE_BASENAME}.mjs`;
 export const RUNTIME_BUNDLE_MJS = `${RUNTIME_BUNDLE_BASENAME}.mjs`;
 export const RUNTIME_BUNDLE_JSON = `${RUNTIME_BUNDLE_BASENAME}.json`;
+export const SOURCE_BUNDLE_TGZ = `${PRODUCT_BUNDLE_BASENAME}-sources.tgz`;
 
 export async function readPackageJson(rootDir) {
   return JSON.parse(await fs.readFile(path.resolve(rootDir, "package.json"), "utf8"));
@@ -81,7 +84,9 @@ export function resolveRuntimeBundlePaths(rootDir) {
   const bundleDir = path.resolve(rootDir, RUNTIME_BUNDLE_DIR);
   return {
     bundleDir,
+    cliPath: path.resolve(bundleDir, CLI_BUNDLE_MJS),
     runtimePath: path.resolve(bundleDir, RUNTIME_BUNDLE_MJS),
-    metadataPath: path.resolve(bundleDir, RUNTIME_BUNDLE_JSON)
+    metadataPath: path.resolve(bundleDir, RUNTIME_BUNDLE_JSON),
+    sourceArchivePath: path.resolve(bundleDir, SOURCE_BUNDLE_TGZ)
   };
 }

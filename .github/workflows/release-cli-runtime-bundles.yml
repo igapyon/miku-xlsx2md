@@ -1,0 +1,83 @@
+name: Release CLI/runtime bundles
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release-cli-runtime-bundles:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release tag
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          case "${TAG_NAME}" in
+            v*) ;;
+            *)
+              echo "Release tag must start with v: ${TAG_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          VERSION="${TAG_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          case "${VERSION}" in
+            "${PACKAGE_VERSION}"|"${PACKAGE_VERSION}".*) ;;
+            *)
+              echo "Release tag version (${VERSION}) must match package.json version (${PACKAGE_VERSION}) or add a dot suffix." >&2
+              exit 1
+              ;;
+          esac
+
+          echo "RELEASE_VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Build
+        run: npm run build
+
+      - name: Build release bundles
+        run: npm run build:bundle
+
+      - name: Verify release bundle files
+        run: |
+          set -euo pipefail
+          test -s bundle/miku-xlsx2md.mjs
+          test -s bundle/miku-xlsx2md-runtime.mjs
+          test -s bundle/miku-xlsx2md-sources.tgz
+
+      - name: Smoke runtime bundle
+        run: npm run smoke:runtime
+
+      - name: Smoke CLI bundle
+        run: npm run smoke:bundle
+
+      - name: Stage release assets
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: npm run stage:runtime-release
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*
+          overwrite_files: true

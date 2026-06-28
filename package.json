@@ -1,6 +1,6 @@
 {
   "name": "miku-xlsx2md",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,8 @@
     "build:core": "node scripts/build-miku-xlsx2md.mjs",
     "build": "npm test",
     "build:runtime": "npm run build:core && node scripts/build-runtime-bundle.mjs",
+    "build:bundle": "npm run build:core && node scripts/build-runtime-bundle.mjs && node scripts/build-cli-bundle.mjs && node scripts/build-sources-bundle.mjs",
+    "smoke:bundle": "node scripts/smoke-cli-bundle.mjs",
     "smoke:runtime": "node scripts/smoke-runtime-bundle.mjs",
     "stage:runtime-release": "node scripts/stage-runtime-release-assets.mjs",
     "cli": "node scripts/miku-xlsx2md-cli.mjs"

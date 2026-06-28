@@ -45,7 +45,7 @@ sources:
     role: primary
 conversion:
   tool: miku-xlsx2md
-  version: "1.2.1"
+  version: "1.2.2"
   output_mode: display
   formatting_mode: github
   table_detection_mode: balanced

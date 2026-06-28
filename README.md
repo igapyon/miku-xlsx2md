@@ -91,29 +91,35 @@ Generated browser HTML files are no longer owned by this repository. Build and r
 GitHub Actions:
 
 - `.github/workflows/ci.yml` runs `npm ci` and `npm test` on pushes to `main` / `devel` and on pull requests.
-- `.github/workflows/release-runtime-bundle.yml` runs on `v*` tags and publishes runtime bundle release assets.
+- `.github/workflows/release-cli-runtime-bundles.yml` runs when a `v*` GitHub Release is published and publishes CLI/runtime/source release assets.
 
 ## Runtime Bundle
 
 This repository publishes the upstream runtime bundle consumed by downstream surfaces such as `miku-xlsx2md-web`.
 
 ```bash
-npm run build:runtime
+npm run build:bundle
+npm run smoke:bundle
 npm run smoke:runtime
 npm run stage:runtime-release
 ```
 
 Generated local artifacts:
 
+- `bundle/miku-xlsx2md.mjs`
 - `bundle/miku-xlsx2md-runtime.mjs`
 - `bundle/miku-xlsx2md-runtime.json`
+- `bundle/miku-xlsx2md-sources.tgz`
 
 Release asset names:
 
+- `miku-xlsx2md-<version>.mjs`
 - `miku-xlsx2md-runtime-<version>.mjs`
-- `miku-xlsx2md-runtime-<version>.json`
+- `miku-xlsx2md-sources-<version>.tgz`
 
-The GitHub Actions workflow `.github/workflows/release-runtime-bundle.yml` runs on `v*` tags, builds and tests the main application, builds the runtime bundle, runs the runtime smoke check, stages release assets, and uploads them to the matching GitHub Release.
+`bundle/miku-xlsx2md-runtime.json` is local build metadata and is not uploaded as a GitHub Release asset.
+
+The GitHub Actions workflow `.github/workflows/release-cli-runtime-bundles.yml` runs when a `v*` GitHub Release is published, checks out the release tag, builds and tests the main application, builds the CLI/runtime/source bundles, runs bundle smoke checks, stages release assets, and uploads them to the matching GitHub Release.
 
 ## Tech Stack
 
@@ -206,19 +212,25 @@ npm run build
 このリポジトリは、`miku-xlsx2md-web` などの downstream surface が利用する upstream runtime bundle を提供します。
 
 ```bash
-npm run build:runtime
+npm run build:bundle
+npm run smoke:bundle
 npm run smoke:runtime
 npm run stage:runtime-release
 ```
 
 ローカル生成物:
 
+- `bundle/miku-xlsx2md.mjs`
 - `bundle/miku-xlsx2md-runtime.mjs`
 - `bundle/miku-xlsx2md-runtime.json`
+- `bundle/miku-xlsx2md-sources.tgz`
 
 GitHub Release asset 名:
 
+- `miku-xlsx2md-<version>.mjs`
 - `miku-xlsx2md-runtime-<version>.mjs`
-- `miku-xlsx2md-runtime-<version>.json`
+- `miku-xlsx2md-sources-<version>.tgz`
 
-`.github/workflows/release-runtime-bundle.yml` は `v*` tag push で動作し、main application の build/test、runtime bundle 生成、runtime smoke、release asset staging、GitHub Release への upload を行います。
+`bundle/miku-xlsx2md-runtime.json` はローカル build metadata であり、GitHub Release asset としては upload しません。
+
+`.github/workflows/release-cli-runtime-bundles.yml` は `v*` GitHub Release の publish で動作し、release tag の checkout、main application の build/test、CLI/runtime/source bundle 生成、bundle smoke、release asset staging、GitHub Release への upload を行います。
