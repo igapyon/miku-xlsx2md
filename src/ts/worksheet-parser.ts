@@ -103,6 +103,14 @@
     svgData: Uint8Array | null;
   };
 
+  type ParsedCellComment = {
+    address: string;
+    kind: "note" | "threaded";
+    author: string;
+    text: string;
+    dateTime: string;
+  };
+
   type ParsedCell = {
     address: string;
     row: number;
@@ -141,6 +149,7 @@
     images: ParsedImageAsset[];
     charts: ParsedChartAsset[];
     shapes: ParsedShapeAsset[];
+    comments: ParsedCellComment[];
     maxRow: number;
     maxCol: number;
   };
@@ -261,6 +270,106 @@
       }
     }
     return hyperlinks;
+  }
+
+  function extractRichTextPlainText(element: Element | null | undefined, deps: Pick<WorksheetParserDependencies, "getTextContent">): string {
+    if (!element) return "";
+    const textNodes = Array.from(element.getElementsByTagName("t"));
+    if (textNodes.length > 0) {
+      return textNodes.map((node) => deps.getTextContent(node)).join("");
+    }
+    return deps.getTextContent(element);
+  }
+
+  function parseLegacyCommentsXml(
+    xmlText: string,
+    deps: Pick<WorksheetParserDependencies, "xmlToDocument" | "getTextContent">
+  ): ParsedCellComment[] {
+    const doc = deps.xmlToDocument(xmlText);
+    const authors = Array.from(doc.getElementsByTagName("author")).map((node) => deps.getTextContent(node).trim());
+    return Array.from(doc.getElementsByTagName("comment")).map((commentElement) => {
+      const authorId = Number(commentElement.getAttribute("authorId") || 0);
+      return {
+        address: (commentElement.getAttribute("ref") || "").trim(),
+        kind: "note",
+        author: authors[authorId] || "",
+        text: extractRichTextPlainText(commentElement.getElementsByTagName("text")[0] || null, deps).trim(),
+        dateTime: ""
+      } satisfies ParsedCellComment;
+    }).filter((comment) => !!comment.address && !!comment.text);
+  }
+
+  function parsePersonDisplayNames(
+    files: Map<string, Uint8Array>,
+    deps: Pick<WorksheetParserDependencies, "xmlToDocument" | "decodeXmlText">
+  ): Map<string, string> {
+    const persons = new Map<string, string>();
+    for (const [path, bytes] of files.entries()) {
+      if (!/^xl\/persons\/person[^/]*\.xml$/u.test(path)) continue;
+      const doc = deps.xmlToDocument(deps.decodeXmlText(bytes));
+      for (const personElement of Array.from(doc.getElementsByTagName("person"))) {
+        const id = (personElement.getAttribute("id") || "").trim();
+        const displayName = (personElement.getAttribute("displayName") || "").trim();
+        if (id && displayName) {
+          persons.set(id, displayName);
+        }
+      }
+    }
+    return persons;
+  }
+
+  function parseThreadedCommentsXml(
+    xmlText: string,
+    persons: Map<string, string>,
+    deps: Pick<WorksheetParserDependencies, "xmlToDocument" | "getTextContent">
+  ): ParsedCellComment[] {
+    const doc = deps.xmlToDocument(xmlText);
+    return Array.from(doc.getElementsByTagName("threadedComment")).map((commentElement) => {
+      const personId = (commentElement.getAttribute("personId") || "").trim();
+      return {
+        address: (commentElement.getAttribute("ref") || "").trim(),
+        kind: "threaded",
+        author: persons.get(personId) || personId,
+        text: extractRichTextPlainText(commentElement, deps).trim(),
+        dateTime: (commentElement.getAttribute("dT") || "").trim()
+      } satisfies ParsedCellComment;
+    }).filter((comment) => !!comment.address && !!comment.text);
+  }
+
+  function isLegacyCommentRelationship(type: string): boolean {
+    return /\/comments$/u.test(type);
+  }
+
+  function isThreadedCommentRelationship(type: string): boolean {
+    return /\/threadedComment$/u.test(type) || /\/threadedComments$/u.test(type);
+  }
+
+  function parseWorksheetComments(
+    files: Map<string, Uint8Array>,
+    sheetPath: string,
+    deps: Pick<WorksheetParserDependencies, "xmlToDocument" | "decodeXmlText" | "getTextContent" | "parseRelationshipEntries" | "buildRelsPath" | "parseCellAddress">
+  ): ParsedCellComment[] {
+    const comments: ParsedCellComment[] = [];
+    const relsPath = deps.buildRelsPath(sheetPath);
+    const relEntries = deps.parseRelationshipEntries(files, relsPath, sheetPath);
+    const persons = parsePersonDisplayNames(files, deps);
+    for (const entry of relEntries.values()) {
+      const bytes = files.get(entry.target);
+      if (!bytes) continue;
+      const xmlText = deps.decodeXmlText(bytes);
+      if (isLegacyCommentRelationship(entry.type)) {
+        comments.push(...parseLegacyCommentsXml(xmlText, deps));
+      } else if (isThreadedCommentRelationship(entry.type)) {
+        comments.push(...parseThreadedCommentsXml(xmlText, persons, deps));
+      }
+    }
+    return comments.sort((left, right) => {
+      const leftPos = deps.parseCellAddress(left.address);
+      const rightPos = deps.parseCellAddress(right.address);
+      if (leftPos.row !== rightPos.row) return leftPos.row - rightPos.row;
+      if (leftPos.col !== rightPos.col) return leftPos.col - rightPos.col;
+      return left.kind.localeCompare(right.kind);
+    });
   }
 
   function hasEnabledBooleanValue(node: Element | null | undefined): boolean {
@@ -610,6 +719,7 @@
     const shapes = deps.parseShapes === false
       ? []
       : deps.parseDrawingShapes(files, sheetName, sheetPath, assetDeps);
+    const comments = parseWorksheetComments(files, sheetPath, deps);
     let maxRow = 0;
     let maxCol = 0;
     for (const cell of cells) {
@@ -630,6 +740,7 @@
       images,
       charts,
       shapes,
+      comments,
       maxRow,
       maxCol
     };
@@ -639,6 +750,10 @@
     extractCellOutputValue,
     expandRangeAddresses,
     parseWorksheetHyperlinks,
+    parseLegacyCommentsXml,
+    parsePersonDisplayNames,
+    parseThreadedCommentsXml,
+    parseWorksheetComments,
     shiftReferenceAddress,
     translateSharedFormula,
     parseWorksheet

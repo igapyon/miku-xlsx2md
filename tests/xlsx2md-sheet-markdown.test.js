@@ -324,6 +324,36 @@ describe("xlsx2md sheet markdown", () => {
     expect(chartSection).toContain("    - values: Sheet1!B2:B5");
   });
 
+  it("renders comments as a separate sheet section and counts them in summary", () => {
+    const module = bootSheetMarkdown();
+    const api = module.createSheetMarkdownApi(createDeps({
+      renderNarrativeBlock: (block) => block.lines.join("\n")
+    }));
+    const workbook = { name: "book.xlsx", sheets: [] };
+    const sheet = {
+      name: "Sheet1",
+      index: 1,
+      cells: [
+        { address: "A1", row: 1, col: 1, outputValue: "Cell", rawValue: "Cell", formulaText: "", resolutionStatus: null, resolutionSource: null }
+      ],
+      merges: [],
+      images: [],
+      charts: [],
+      shapes: [],
+      comments: [
+        { address: "A1", kind: "note", author: "Alice", text: "Legacy note", dateTime: "" },
+        { address: "B2", kind: "threaded", author: "Bob", text: "Threaded reply", dateTime: "2026-07-02T10:00:00Z" }
+      ]
+    };
+
+    const result = api.convertSheetToMarkdown(workbook, sheet, {});
+
+    expect(result.markdown).toContain("### Comments");
+    expect(result.markdown).toContain("- [comment-1] (A1; note; author=Alice) Legacy note");
+    expect(result.markdown).toContain("- [comment-2] (B2; threaded; author=Bob; date=2026-07-02T10:00:00Z) Threaded reply");
+    expect(result.summary.comments).toBe(2);
+  });
+
   it("renders ungrouped shapes after grouped shape blocks", () => {
     const module = bootSheetMarkdown();
     const api = module.createSheetMarkdownApi(createDeps({
