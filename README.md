@@ -12,7 +12,7 @@ Links:
 
 ## What is this?
 
-`miku-xlsx2md` reads `.xlsx` files locally and extracts prose, tables, images, chart information, shape source data, hyperlinks, rich text, and formula-derived values into Markdown and related artifacts.
+`miku-xlsx2md` reads `.xlsx` files locally and extracts prose, tables, images, chart information, shape source data, comments, notes, threaded comments, hyperlinks, rich text, and formula-derived values into Markdown and related artifacts.
 
 The conversion goal is meaningful Markdown extraction, not exact visual reproduction of Excel.
 
@@ -21,7 +21,7 @@ Generated combined Markdown includes workbook-level YAML front matter with the a
 ## Features
 
 - Converts all sheets in a workbook in one pass
-- Extracts prose, tables, images, chart configuration data, and shape source data
+- Extracts prose, tables, images, chart configuration data, shape source data, comments, notes, and threaded comments
 - Detects table-like regions using borders and value groupings
 - Supports `display / raw / both` output modes
 - Supports `plain / github` formatting modes

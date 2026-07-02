@@ -971,6 +971,13 @@ ImageAsset
   - 日付系表示値の一部文字列化
 - `xl/worksheets/_rels/sheet*.xml.rels`
   - worksheet から drawing への解決
+  - worksheet から comments / threaded comments への解決
+- `xl/comments*.xml`
+  - セルに紐づく従来型メモ / notes
+- `xl/threadedComments/threadedComment*.xml`
+  - セルに紐づくスレッドコメント本文
+- `xl/persons/person*.xml`
+  - threaded comments の personId から表示名への解決
 - `xl/drawings/*.xml`
   - 画像アンカー位置
   - グラフアンカー位置
@@ -1032,7 +1039,6 @@ ImageAsset
 - array formula
 - dynamic array spill
 - 条件付き書式
-- コメント / メモ
 - データ検証
 - ピボットテーブル
 - グラフの完全再描画や SVG 化
@@ -1085,7 +1091,6 @@ ImageAsset
 - `calcChain.xml` を用いた計算順最適化
 - rich text の装飾差分保持
 - 条件付き書式
-- コメント / メモ
 - データ検証
 
 低優先:

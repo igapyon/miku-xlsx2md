@@ -61,10 +61,17 @@ function createDeps() {
         const target = node.getAttribute("Target") || "";
         if (!id || !target) continue;
         const targetMode = node.getAttribute("TargetMode") || "";
+        const baseParts = String(sourcePath || "").split("/").slice(0, -1);
+        const parts = target.startsWith("/") ? [] : baseParts;
+        for (const part of target.split("/")) {
+          if (!part || part === ".") continue;
+          if (part === "..") parts.pop();
+          else parts.push(part);
+        }
         entries.set(id, {
           target: targetMode === "External"
             ? target
-            : `${String(sourcePath || "").split("/").slice(0, -1).join("/")}/${target}`.replace(/\/\.\//g, "/"),
+            : parts.join("/"),
           targetMode,
           type: node.getAttribute("Type") || ""
         });
@@ -231,5 +238,56 @@ describe("xlsx2md worksheet parser", () => {
       tooltip: "go",
       display: ""
     });
+  });
+
+  it("parses legacy notes and threaded comments from worksheet relationships", () => {
+    const api = bootWorksheetParser();
+    const deps = createDeps();
+    const worksheetXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <sheetData>
+          <row r="1"><c r="A1" t="inlineStr"><is><t>Cell</t></is></c></row>
+        </sheetData>
+      </worksheet>`;
+    const commentsXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <authors><author>Alice</author></authors>
+        <commentList>
+          <comment ref="A1" authorId="0"><text><r><t>Legacy note</t></r></text></comment>
+        </commentList>
+      </comments>`;
+    const personsXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <personList xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">
+        <person id="{person-1}" displayName="Bob"/>
+      </personList>`;
+    const threadedXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <ThreadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">
+        <threadedComment ref="B2" personId="{person-1}" dT="2026-07-02T10:00:00Z"><text>Threaded reply</text></threadedComment>
+      </ThreadedComments>`;
+    const files = new Map([
+      ["xl/worksheets/sheet1.xml", new TextEncoder().encode(worksheetXml)],
+      ["xl/comments1.xml", new TextEncoder().encode(commentsXml)],
+      ["xl/persons/person.xml", new TextEncoder().encode(personsXml)],
+      ["xl/threadedComments/threadedComment1.xml", new TextEncoder().encode(threadedXml)],
+      ["xl/worksheets/_rels/sheet1.xml.rels", new TextEncoder().encode(
+        '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="comments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments1.xml"/>' +
+        '<Relationship Id="threaded" Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" Target="../threadedComments/threadedComment1.xml"/>' +
+        "</Relationships>"
+      )]
+    ]);
+
+    const sheet = api.parseWorksheet(files, "Sheet1", "xl/worksheets/sheet1.xml", 1, [], [{
+      borders: { top: false, bottom: false, left: false, right: false },
+      numFmtId: 0,
+      formatCode: "General",
+      textStyle: { bold: false, italic: false, strike: false, underline: false }
+    }], deps);
+
+    expect(sheet.comments).toEqual([
+      { address: "A1", kind: "note", author: "Alice", text: "Legacy note", dateTime: "" },
+      { address: "B2", kind: "threaded", author: "Bob", text: "Threaded reply", dateTime: "2026-07-02T10:00:00Z" }
+    ]);
   });
 });

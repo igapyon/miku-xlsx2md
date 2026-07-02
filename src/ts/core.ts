@@ -85,6 +85,7 @@
     images: ParsedImageAsset[];
     charts: ParsedChartAsset[];
     shapes: ParsedShapeAsset[];
+    comments: ParsedCellComment[];
     maxRow: number;
     maxCol: number;
   };
@@ -135,6 +136,14 @@
     svgFilename: string | null;
     svgPath: string | null;
     svgData: Uint8Array | null;
+  };
+
+  type ParsedCellComment = {
+    address: string;
+    kind: "note" | "threaded";
+    author: string;
+    text: string;
+    dateTime: string;
   };
 
   type ParsedRangeRef = {
@@ -234,6 +243,7 @@
       merges: number;
       images: number;
       charts: number;
+      comments: number;
       cells: number;
       tableScores: TableScoreDetail[];
       formulaDiagnostics: FormulaDiagnostic[];

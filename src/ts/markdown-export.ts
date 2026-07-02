@@ -35,6 +35,7 @@
       merges: number;
       images: number;
       charts: number;
+      comments: number;
       cells: number;
       tableScores: TableScoreDetail[];
       formulaDiagnostics: FormulaDiagnostic[];
@@ -176,6 +177,7 @@
       `Merged ranges: ${markdownFile.summary.merges}`,
       `Images: ${markdownFile.summary.images}`,
       `Charts: ${markdownFile.summary.charts}`,
+      `Comments: ${markdownFile.summary.comments || 0}`,
       `Analyzed cells: ${markdownFile.summary.cells}`,
       ...FORMULA_STATUSES.map((status) => `Formula ${status}: ${formulaCounts[status]}`),
       ...markdownFile.summary.tableScores.map((detail) => `Table candidate ${detail.range}: score ${detail.score} / ${detail.reasons.join(", ")}`)

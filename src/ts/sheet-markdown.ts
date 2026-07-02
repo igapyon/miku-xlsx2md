@@ -120,6 +120,14 @@
     svgData: Uint8Array | null;
   };
 
+  type ParsedCellComment = {
+    address: string;
+    kind: "note" | "threaded";
+    author: string;
+    text: string;
+    dateTime: string;
+  };
+
   type ParsedSheet = {
     name: string;
     index: number;
@@ -128,6 +136,7 @@
     images: ParsedImageAsset[];
     charts: ParsedChartAsset[];
     shapes: ParsedShapeAsset[];
+    comments: ParsedCellComment[];
   };
 
   type ParsedWorkbook = {
@@ -191,6 +200,7 @@
     imageSection: string;
     chartSection: string;
     shapeSection: string;
+    commentSection: string;
   };
 
   type CellMarkdownValues = {
@@ -230,6 +240,7 @@
       merges: number;
       images: number;
       charts: number;
+      comments: number;
       cells: number;
       tableScores: Array<{
         range: string;
@@ -842,6 +853,28 @@
         : "";
     }
 
+    function createCommentSectionEntry(comment: ParsedCellComment, index: number): string {
+      const label = `comment-${index + 1}`;
+      const metadata = [
+        comment.address,
+        comment.kind,
+        comment.author ? `author=${comment.author}` : "",
+        comment.dateTime ? `date=${comment.dateTime}` : ""
+      ].filter(Boolean).join("; ");
+      return `- [${label}] (${metadata}) ${comment.text}`;
+    }
+
+    function renderCommentSection(comments: ParsedCellComment[] = []): string {
+      return comments.length > 0
+        ? [
+          "",
+          "### Comments",
+          "",
+          ...comments.map((comment, index) => createCommentSectionEntry(comment, index))
+        ].join("\n\n")
+        : "";
+    }
+
     function createFormulaDiagnostics(sheet: ParsedSheet): MarkdownFile["summary"]["formulaDiagnostics"] {
       return sheet.cells
         .filter((cell) => !!cell.formulaText && cell.resolutionStatus !== null)
@@ -1047,6 +1080,7 @@
       const chartSection = renderChartSection(charts);
       const includeShapeDetails = resolvedOptions.includeShapeDetails;
       const shapeSection = renderShapeSection(shapes, shapeBlocks, includeShapeDetails);
+      const commentSection = renderCommentSection(sheet.comments || []);
       return {
         resolvedOptions,
         charts,
@@ -1061,7 +1095,8 @@
         body,
         imageSection,
         chartSection,
-        shapeSection
+        shapeSection,
+        commentSection
       };
     }
 
@@ -1072,6 +1107,7 @@
         `## Sheet: ${sheet.name}`,
         "",
         state.body || "_No extractable body content was found._",
+        state.commentSection,
         state.chartSection,
         state.shapeSection,
         state.imageSection
@@ -1090,6 +1126,7 @@
         merges: sheet.merges.length,
         images: sheet.images.length,
         charts: state.charts.length,
+        comments: (sheet.comments || []).length,
         cells: sheet.cells.length,
         tableScores: state.tables.map((table) => ({
           range: deps.formatRange(table.startRow, table.startCol, table.endRow, table.endCol),
@@ -1140,6 +1177,7 @@
       renderImageSection,
       renderChartSection,
       renderShapeSection,
+      renderCommentSection,
       convertSheetToMarkdown,
       convertWorkbookToMarkdownFiles
     };
