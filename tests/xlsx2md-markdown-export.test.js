@@ -308,7 +308,7 @@ describe("xlsx2md markdown export", () => {
         }
       }],
       {
-        toolVersion: "1.2.3",
+        toolVersion: "1.3.0",
         shapeDetails: "include"
       }
     );
@@ -319,7 +319,7 @@ describe("xlsx2md markdown export", () => {
       "type: converted",
       "conversion:",
       "  tool: miku-xlsx2md",
-      "  version: \"1.2.3\"",
+      "  version: \"1.3.0\"",
       "  output_mode: both",
       "  formatting_mode: github",
       "  table_detection_mode: border",
