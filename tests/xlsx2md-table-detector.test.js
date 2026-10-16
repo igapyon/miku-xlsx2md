@@ -39,6 +39,43 @@ function buildCellMap(sheet) {
   return cellMap;
 }
 
+function createMergedHeaderSheet({
+  startRow = 2,
+  startCol = 1,
+  width = 3,
+  merges = [{ start: 0, end: 1, value: "Group" }],
+  labels = [{ col: 2, value: "C" }],
+  extraHeaderCells = []
+} = {}) {
+  const headerRow = startRow - 1;
+  const cells = [];
+  const sheetMerges = merges.map((merge) => ({
+    startRow: headerRow,
+    startCol: startCol + merge.start,
+    endRow: merge.endRow ?? headerRow,
+    endCol: startCol + merge.end,
+    ref: "test"
+  }));
+  for (const merge of merges) {
+    cells.push(createCell(headerRow, startCol + merge.start, merge.value ?? "Group"));
+  }
+  for (const label of labels) {
+    cells.push(createCell(headerRow, startCol + label.col, label.value));
+  }
+  cells.push(...extraHeaderCells.map((cell) => createCell(headerRow, startCol + cell.col, cell.value, cell.borders)));
+  for (let row = startRow; row <= startRow + 1; row += 1) {
+    for (let col = startCol; col < startCol + width; col += 1) {
+      cells.push(createCell(row, col, String((row - startRow) * width + col - startCol + 1), {
+        top: true,
+        bottom: true,
+        left: true,
+        right: true
+      }));
+    }
+  }
+  return { cells, merges: sheetMerges };
+}
+
 describe("xlsx2md table detector", () => {
   it("collects seed cells from values or borders", () => {
     const api = bootTableDetector();
@@ -515,5 +552,135 @@ describe("xlsx2md table detector", () => {
         endCol: 3
       })
     ]));
+  });
+
+  it("includes one complete borderless partial-merge header row in balanced mode without changing the score or input", () => {
+    const api = bootTableDetector();
+    const sheet = createMergedHeaderSheet();
+    const original = structuredClone(sheet);
+    const bodyOnly = {
+      cells: sheet.cells.filter((cell) => cell.row >= 2),
+      merges: []
+    };
+    const baseline = api.detectTableCandidates(bodyOnly, buildCellMap, undefined, "balanced");
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ startRow: 1, startCol: 1, endRow: 3, endCol: 3 });
+    expect(candidates[0].score).toBe(baseline[0].score);
+    expect(candidates[0].reasonSummary.filter((reason) => reason === "Included borderless merged header row (no score change)")).toHaveLength(1);
+    expect(sheet).toEqual(original);
+  });
+
+  it("only adds the merged header row in balanced mode", () => {
+    const api = bootTableDetector();
+    const sheet = createMergedHeaderSheet();
+
+    for (const mode of ["border", "planner-aware"]) {
+      const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, mode);
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]).toMatchObject({ startRow: 2, startCol: 1, endRow: 3, endCol: 3 });
+      expect(candidates[0].reasonSummary).not.toContain("Included borderless merged header row (no score change)");
+    }
+  });
+
+  it("covers every column with multiple partial merged labels and supports translated coordinates", () => {
+    const api = bootTableDetector();
+    const wide = createMergedHeaderSheet({
+      width: 4,
+      merges: [
+        { start: 0, end: 1, value: "Group1" },
+        { start: 2, end: 3, value: "Group2" }
+      ],
+      labels: []
+    });
+    const wideCandidates = api.detectTableCandidates(wide, buildCellMap, undefined, "balanced");
+    expect(wideCandidates).toHaveLength(1);
+    expect(wideCandidates[0]).toMatchObject({ startRow: 1, startCol: 1, endRow: 3, endCol: 4 });
+
+    const translated = createMergedHeaderSheet({ startRow: 6, startCol: 2 });
+    const translatedCandidates = api.detectTableCandidates(translated, buildCellMap, undefined, "balanced");
+    expect(translatedCandidates).toHaveLength(1);
+    expect(translatedCandidates[0]).toMatchObject({ startRow: 5, startCol: 2, endRow: 7, endCol: 4 });
+  });
+
+  it("does not extend ordinary headers or full-width title merges", () => {
+    const api = bootTableDetector();
+    const ordinaryHeader = createMergedHeaderSheet({ merges: [], labels: [
+      { col: 0, value: "A" }, { col: 1, value: "B" }, { col: 2, value: "C" }
+    ] });
+    expect(api.detectTableCandidates(ordinaryHeader, buildCellMap, undefined, "balanced")[0])
+      .toMatchObject({ startRow: 2, endRow: 3 });
+
+    const titleAndHeader = createMergedHeaderSheet({ startRow: 3 });
+    titleAndHeader.merges.push({ startRow: 1, startCol: 1, endRow: 1, endCol: 3, ref: "A1:C1" });
+    titleAndHeader.cells.push(createCell(1, 1, "Title"));
+    const candidates = api.detectTableCandidates(titleAndHeader, buildCellMap, undefined, "balanced");
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ startRow: 2, startCol: 1, endRow: 4, endCol: 3 })
+    ]));
+
+    const fullWidthTitle = createMergedHeaderSheet({ merges: [{ start: 0, end: 2, value: "Title" }], labels: [] });
+    expect(api.detectTableCandidates(fullWidthTitle, buildCellMap, undefined, "balanced")[0])
+      .toMatchObject({ startRow: 2, endRow: 3 });
+
+    const widthTwo = createMergedHeaderSheet({
+      width: 2,
+      merges: [],
+      labels: [{ col: 0, value: "Title" }, { col: 1, value: "2026-10-16" }]
+    });
+    expect(api.detectTableCandidates(widthTwo, buildCellMap, undefined, "balanced")[0])
+      .toMatchObject({ startRow: 2, endRow: 3 });
+  });
+
+  it("rejects incomplete, long, multiline, numeric, or empty merged-header labels", () => {
+    const api = bootTableDetector();
+    const invalidCases = [
+      createMergedHeaderSheet({ width: 4, labels: [{ col: 3, value: "D" }] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "X".repeat(25) }] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "Group\nName" }] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "123" }] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "" }] })
+    ];
+    for (const sheet of invalidCases) {
+      expect(api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced")[0])
+        .toMatchObject({ startRow: 2, endRow: 3 });
+    }
+
+    const valid24 = createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "X".repeat(24) }] });
+    expect(api.detectTableCandidates(valid24, buildCellMap, undefined, "balanced")[0])
+      .toMatchObject({ startRow: 1, endRow: 3 });
+  });
+
+  it("rejects malformed or conflicting merged headers and adjacent spill cells", () => {
+    const api = bootTableDetector();
+    const invalidCases = [
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "Group" }, { start: 1, end: 2, value: "Overlap" }], labels: [] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 1, value: "Group", endRow: 2 }] }),
+      createMergedHeaderSheet({ merges: [{ start: 0, end: 3, value: "Group" }] }),
+      createMergedHeaderSheet({ extraHeaderCells: [{ col: 1, value: "hidden" }] }),
+      createMergedHeaderSheet({ extraHeaderCells: [{ col: 3, value: "Extra" }] }),
+      createMergedHeaderSheet({ startCol: 2, extraHeaderCells: [{ col: -1, value: "Left" }] })
+    ];
+    for (const sheet of invalidCases) {
+      expect(api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced")[0])
+        .toMatchObject({ startRow: 2, endRow: 3 });
+    }
+  });
+
+  it("keeps two independent partial-merge tables side by side", () => {
+    const api = bootTableDetector();
+    const left = createMergedHeaderSheet({ startCol: 1 });
+    const right = createMergedHeaderSheet({ startCol: 5 });
+    const sheet = {
+      cells: [...left.cells, ...right.cells],
+      merges: [...left.merges, ...right.merges]
+    };
+    const candidates = api.detectTableCandidates(sheet, buildCellMap, undefined, "balanced");
+    expect(candidates.map(({ startRow, startCol, endRow, endCol }) => ({ startRow, startCol, endRow, endCol })))
+      .toEqual([
+        { startRow: 1, startCol: 1, endRow: 3, endCol: 3 },
+        { startRow: 1, startCol: 5, endRow: 3, endCol: 7 }
+      ]);
   });
 });

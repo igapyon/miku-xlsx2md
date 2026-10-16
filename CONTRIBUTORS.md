@@ -6,3 +6,5 @@ This project includes contributions, feedback, and improvement suggestions from 
   - Helped improve ZIP UTF-8 filename handling by pointing out that Japanese file names were not being handled correctly.
 - Nich87
   - Contributed through PR #41 by prompting improvements to ZIP UTF-8 filename handling and follow-up TODOs for Markdown/BOM policy.
+- Feri (docrender.dev)
+  - Shared correction suggestions and regression scenarios for tables with narrower header rows and horizontally merged header cells in Issue #33, along with a reference article: https://docrender.dev/blog/ods-odp-to-markdown
