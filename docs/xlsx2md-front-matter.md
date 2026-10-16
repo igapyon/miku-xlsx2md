@@ -26,7 +26,7 @@ title: "sales.xlsx"
 type: converted
 conversion:
   tool: miku-xlsx2md
-  version: "1.3.0"
+  version: "1.3.1"
   output_mode: display
   formatting_mode: github
   table_detection_mode: balanced

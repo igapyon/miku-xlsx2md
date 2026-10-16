@@ -131,7 +131,7 @@ describe("xlsx2md cli", () => {
       cwd: path.resolve(__dirname, "..")
     });
 
-    expect(result.stdout.trim()).toBe("1.3.0");
+    expect(result.stdout.trim()).toBe("1.3.1");
     expect(result.stderr).toBe("");
   });
 

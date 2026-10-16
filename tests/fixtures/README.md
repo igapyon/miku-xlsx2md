@@ -64,6 +64,12 @@
 | `table/table-basic-sample14.xlsx` | 方眼紙表(結合漏れ) | `xlsx2md-spec.md` 7, 8, 13 | merge 多用表で一部だけ結合漏れがある場合の崩れ |
 | `table/table-basic-sample15.xlsx` | 方眼紙表(縦結合混在) | `xlsx2md-spec.md` 7, 8, 13 | merge 多用表で縦結合が混じる場合の崩れ |
 | `table/table-border-priority-sample01.xlsx` | border モード | `xlsx2md-spec.md` 7, 8 | borderless dense block の誤検知と `border` 差分 |
+| `table/table-header-width-unbordered-sample01.xlsx` | 見出しより広い無罫線表 | `xlsx2md-spec.md` 7 | 空見出し列を含む表範囲の推定 |
+| `table/table-header-width-bordered-sample01.xlsx` | 見出しより広い罫線表 | `xlsx2md-spec.md` 7 | D1 が存在しない場合の4列検出 |
+| `table/table-header-width-mixed-borders-sample01.xlsx` | 見出しより広い罫線混在表 | `xlsx2md-spec.md` 7 | 隣接する無罫線セルを表外の地の文として保持 |
+| `table/table-merged-header-unbordered-sample01.xlsx` | 部分結合見出しの無罫線表 | `xlsx2md-spec.md` 7, 13 | 結合マーカーを含む見出し行の保持 |
+| `table/table-merged-header-bordered-sample01.xlsx` | 部分結合見出しの罫線表 | `xlsx2md-spec.md` 7, 13 | 結合見出しと罫線表の範囲 |
+| `table/table-merged-header-mixed-borders-sample01.xlsx` | 部分結合見出しの罫線混在表 | `xlsx2md-spec.md` 7, 13 | balanced のみで無罫線結合見出しを 1 行追加 |
 
 ### ルート直下
 
@@ -200,6 +206,24 @@
   - `balanced` では表候補になりやすく、`border` では narrative に落ちる差分を確認する
   - 対応章: `xlsx2md-spec.md` 7, 8
   - 主に確認する症状: 非罫線 fallback による誤検知
+- `table-header-width-unbordered-sample01.xlsx` / `table-header-width-bordered-sample01.xlsx`
+  - A1:C1 に A/B/C、A2:D2 に 1/2/3/4 を置いた幅の異なる表
+  - D1 のセル要素は作らず、W1 は全セル無罫線、W2 は値がある7セルに全辺罫線を付ける
+  - D1 が存在しない条件でも、W2 の罫線表が A1:D2 として検出され、4列を維持できるか確認する
+  - 対応章: `xlsx2md-spec.md` 7
+- `table-header-width-mixed-borders-sample01.xlsx`
+  - A1:C2 のみ罫線を付け、D2 の 4 は罫線なしで隣接させる
+  - 表範囲 A1:C2 と表外の値 4 の保持を確認する
+  - 対応章: `xlsx2md-spec.md` 7
+- `table-merged-header-unbordered-sample01.xlsx` / `table-merged-header-bordered-sample01.xlsx`
+  - A1:B1 を Group として横結合し、C1 に C、2 行の数値を置く
+  - 無罫線版と全セル罫線版で結合見出しを含む表を確認する
+  - 対応章: `xlsx2md-spec.md` 7, 13
+- `table-merged-header-mixed-borders-sample01.xlsx`
+  - A1:B1 と C1 の見出しは無罫線、A2:C3 の本体に罫線を付ける
+  - `balanced` は A1:C3、`border` / `planner-aware` は A2:C3 となる差分を確認する
+  - Issue の入力位置を保つため、サンプル説明用のタイトル行は加えない
+  - 対応章: `xlsx2md-spec.md` 7, 13
 
 ## 作成予定 fixture
 

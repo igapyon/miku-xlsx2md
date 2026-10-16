@@ -191,6 +191,159 @@
     });
   }
 
+  function findBorderlessMergedHeaderRow<TCell extends CellLike>(
+    sheet: SheetLike<TCell>,
+    cellMap: Map<string, TCell>,
+    candidate: TableCandidate,
+    otherCandidates: TableCandidate[]
+  ): number | null {
+    const rowCount = candidate.endRow - candidate.startRow + 1;
+    const width = candidate.endCol - candidate.startCol + 1;
+    if (rowCount < 2 || width < 3 || candidate.startRow < 2) {
+      return null;
+    }
+
+    const minHeaderCells = Math.max(2, Math.ceil(width * 0.5));
+    const bodyHeaderStats = borderGridHelper.collectTableEdgeStats(
+      cellMap,
+      candidate.startRow,
+      candidate.startCol,
+      candidate.endCol
+    );
+    if (bodyHeaderStats.rawBorderCount < minHeaderCells || bodyHeaderStats.nonEmptyCount < minHeaderCells) {
+      return null;
+    }
+
+    const headerRow = candidate.startRow - 1;
+    const headerStats = borderGridHelper.collectTableEdgeStats(
+      cellMap,
+      headerRow,
+      candidate.startCol,
+      candidate.endCol
+    );
+    if (headerStats.rawBorderCount !== 0) {
+      return null;
+    }
+
+    function hasValueOrOwnBorder(cell: TCell | undefined): boolean {
+      return !!cell && (
+        !!String(cell.outputValue || "").trim()
+        || cell.borders.top
+        || cell.borders.bottom
+        || cell.borders.left
+        || cell.borders.right
+      );
+    }
+    if (
+      (candidate.startCol > 1 && hasValueOrOwnBorder(cellMap.get(`${headerRow}:${candidate.startCol - 1}`)))
+      || hasValueOrOwnBorder(cellMap.get(`${headerRow}:${candidate.endCol + 1}`))
+    ) {
+      return null;
+    }
+
+    const expandedBounds = {
+      startRow: headerRow,
+      startCol: candidate.startCol,
+      endRow: candidate.endRow,
+      endCol: candidate.endCol
+    };
+    if (otherCandidates.some((other) => (
+      expandedBounds.startRow <= other.endRow
+      && expandedBounds.endRow >= other.startRow
+      && expandedBounds.startCol <= other.endCol
+      && expandedBounds.endCol >= other.startCol
+    ))) {
+      return null;
+    }
+
+    const intersectingMerges = sheet.merges.filter((merge) => (
+      merge.startRow <= headerRow
+      && merge.endRow >= headerRow
+      && merge.startCol <= candidate.endCol
+      && merge.endCol >= candidate.startCol
+    ));
+    if (intersectingMerges.length === 0) {
+      return null;
+    }
+
+    const sortedMerges = [...intersectingMerges].sort((left, right) => left.startCol - right.startCol);
+    let previousEndCol = candidate.startCol - 1;
+    let hasPartialHorizontalMerge = false;
+    const mergedCells = new Set<string>();
+    const columnCoverage = new Set<number>();
+    const labels: string[] = [];
+
+    function isValidLabel(value: string): boolean {
+      const trimmed = value.trim();
+      return trimmed.length >= 1
+        && trimmed.length <= 24
+        && !/[\r\n]/.test(value)
+        && !/^\d+(?:\.\d+)?$/.test(trimmed);
+    }
+
+    for (const merge of sortedMerges) {
+      if (
+        merge.startRow !== headerRow
+        || merge.endRow !== headerRow
+        || merge.startCol < candidate.startCol
+        || merge.endCol > candidate.endCol
+        || merge.startCol > merge.endCol
+        || merge.startCol <= previousEndCol
+      ) {
+        return null;
+      }
+      previousEndCol = merge.endCol;
+      const mergeWidth = merge.endCol - merge.startCol + 1;
+      if (mergeWidth >= 2 && mergeWidth < width) {
+        hasPartialHorizontalMerge = true;
+      }
+      for (let col = merge.startCol; col <= merge.endCol; col += 1) {
+        columnCoverage.add(col);
+        mergedCells.add(`${headerRow}:${col}`);
+        if (col > merge.startCol) {
+          if (String(cellMap.get(`${headerRow}:${col}`)?.outputValue || "").trim()) {
+            return null;
+          }
+        }
+      }
+      const anchorValue = String(cellMap.get(`${headerRow}:${merge.startCol}`)?.outputValue || "");
+      if (!isValidLabel(anchorValue)) {
+        return null;
+      }
+      labels.push(anchorValue.trim());
+    }
+
+    if (!hasPartialHorizontalMerge) {
+      return null;
+    }
+
+    for (let col = candidate.startCol; col <= candidate.endCol; col += 1) {
+      if (mergedCells.has(`${headerRow}:${col}`)) {
+        continue;
+      }
+      const cell = cellMap.get(`${headerRow}:${col}`);
+      const value = String(cell?.outputValue || "");
+      if (!value.trim()) {
+        continue;
+      }
+      if (!isValidLabel(value)) {
+        return null;
+      }
+      columnCoverage.add(col);
+      labels.push(value.trim());
+    }
+
+    if (labels.length < 2 || columnCoverage.size !== width) {
+      return null;
+    }
+    for (let col = candidate.startCol; col <= candidate.endCol; col += 1) {
+      if (!columnCoverage.has(col)) {
+        return null;
+      }
+    }
+    return headerRow;
+  }
+
   function pruneCalendarLikeColumnCandidates(candidates: TableCandidate[]): TableCandidate[] {
     const dropKeys = new Set<string>();
     const sorted = [...candidates].sort((left, right) => {
@@ -434,7 +587,33 @@
       ? pruneCalendarLikeColumnCandidates(prunedCandidates)
       : prunedCandidates;
 
-    return finalCandidates.sort((left, right) => {
+    const candidatesWithMergedHeaders = tableDetectionMode === "balanced"
+      ? finalCandidates.map((candidate, index) => {
+        const otherCandidates = finalCandidates.filter((_other, otherIndex) => otherIndex !== index);
+        const headerRow = findBorderlessMergedHeaderRow(sheet, cellMap, candidate, otherCandidates);
+        if (headerRow === null) {
+          return candidate;
+        }
+        const reason = "Included borderless merged header row (no score change)";
+        return {
+          ...candidate,
+          startRow: headerRow,
+          reasonSummary: candidate.reasonSummary.includes(reason)
+            ? [...candidate.reasonSummary]
+            : [...candidate.reasonSummary, reason]
+        };
+      })
+      : finalCandidates;
+
+    const uniqueCandidates = new Map<string, TableCandidate>();
+    for (const candidate of candidatesWithMergedHeaders) {
+      const key = `${candidate.startRow}:${candidate.startCol}:${candidate.endRow}:${candidate.endCol}`;
+      if (!uniqueCandidates.has(key)) {
+        uniqueCandidates.set(key, candidate);
+      }
+    }
+
+    return [...uniqueCandidates.values()].sort((left, right) => {
       if (left.startRow !== right.startRow) return left.startRow - right.startRow;
       return left.startCol - right.startCol;
     });
